@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Status{% endblock %}
+{% block content %}
+<h1>Ingestion status</h1>
+<div class="cards">
+{% for name, j in health.jobs.items() %}
+  <div class="card"><div class="label">{{ name }}</div>
+    <div class="value">{% if j.stale %}<span class="status-failed">✕ Stale</span>{% elif j.failing %}<span class="status-failed">✕ Last run failed</span>{% else %}<span class="status-ok">✓ OK</span>{% endif %}</div>
+    <div class="sub">Last success: {{ (j.last_success or 'never')[:16] | replace('T',' ') }}</div>
+    {% if j.last_run and j.last_run.error %}<div class="sub status-failed">{{ j.last_run.error }}</div>{% endif %}
+  </div>
+{% else %}
+  <div class="card"><div class="label">Jobs</div><div class="value">—</div><div class="sub">No runs recorded yet</div></div>
+{% endfor %}
+</div>
+<div class="panel table-wrap"><h2>Recent runs</h2>
+<table><thead><tr><th>Job</th><th>Started</th><th>Status</th><th class="num">Rows</th><th>Warning / error</th></tr></thead><tbody>
+{% for r in runs %}
+<tr><td>{{ r.source }}</td><td class="num">{{ r.started[:16] | replace('T',' ') }}</td>
+  <td class="status-{{ r.status }}">{{ {'ok': '✓', 'failed': '✕', 'partial': '!', 'running': '…'}.get(r.status, '') }} {{ r.status }}</td>
+  <td class="num">{{ r.rows }}</td><td>{{ r.error or r.warning or '' }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+<p class="note">Machine-readable: <a href="/health">/health</a>. Health is degraded when a job's latest run failed or it has had no successful run for 2 hours (26 hours for backups).</p>
+{% endblock %}

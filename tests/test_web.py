@@ -1,0 +1,95 @@
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import text
+
+from tests.conftest import load_json
+from tracker.clients.runemetrics import parse_profile
+from tracker.jobs.adventure_log import store_activities
+from tracker.jobs.runs import RunResult
+from tracker.web import app as web
+
+
+@pytest.fixture
+def client(engine):
+    def conn_override():
+        with engine.connect() as conn:
+            yield conn
+
+    web.app.dependency_overrides[web.get_conn] = conn_override
+    yield TestClient(web.app)
+    web.app.dependency_overrides.clear()
+
+
+def seed_xp(engine, hours=48):
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO players (display_name) VALUES ('Get Grouped')"))
+        for h in range(hours):
+            t = now - timedelta(hours=hours - 1 - h)
+            for sid, base in ((0, 1_000_000), (1, 5_000_000)):
+                conn.execute(text("INSERT INTO xp_snapshots (player_id, skill_id, captured_at_utc, xp, level, source) "
+                                  "VALUES (1, :s, :t, :xp, 70, 'hiscores')"), {"s": sid, "t": t, "xp": base + h * 1000})
+            conn.execute(text("INSERT INTO xp_snapshots (player_id, skill_id, captured_at_utc, xp, level, source) "
+                              "VALUES (1, -1, :t, :xp, 140, 'hiscores')"), {"t": t, "xp": 6_000_000 + h * 2000})
+
+
+def test_empty_database_pages_render(client):
+    for path in ("/", "/xp", "/bosses", "/events", "/admin/unparsed", "/status"):
+        r = client.get(path)
+        assert r.status_code == 200 and "No data yet" in r.text
+    h = client.get("/health").json()
+    assert h["status"] == "degraded"
+    assert client.get("/api/levels").status_code == 404
+
+
+def test_only_get_routes_exist():
+    for route in web.app.routes:
+        assert set(getattr(route, "methods", None) or {"GET"}) <= {"GET", "HEAD"}, route.path
+
+
+def test_xp_endpoints(client, engine):
+    seed_xp(engine)
+    levels = {r["skill"]: r for r in client.get("/api/levels").json()}
+    assert levels["Attack"]["xp"] == 1_047_000 and levels["Attack"]["gained_7d"] == 47_000
+    assert levels["Attack"]["eta_next"] is not None
+    series = client.get("/api/xp/series", params={"skill": 0, "range": "7d"}).json()
+    assert len(series) == 48 and series[-1]["xp"] == 1_047_000
+    by_skill = client.get("/api/xp/by-skill", params={"range": "24h"}).json()
+    assert {g["skill"]: g["xp"] for g in by_skill}["Defence"] == 24_000
+    gains = client.get("/api/xp/gains", params={"skill": 0, "range": "all", "bucket": "hour"}).json()
+    assert sum(g["xp"] for g in gains) == 47_000  # sum of deltas == last - first
+    stats = client.get("/api/xp/stats", params={"skill": 0, "range": "7d"}).json()
+    assert stats["gained"] == 47_000 and round(stats["xp_per_hour"]) == 1000
+    assert client.get("/api/xp/series", params={"skill": 99}).status_code == 400
+    csv_body = client.get("/api/export/xp.csv", params={"skill": 0}).text
+    assert csv_body.splitlines()[0].startswith("captured_at_utc,skill,xp") and len(csv_body.splitlines()) == 49
+
+
+def test_boss_and_event_endpoints(client, engine, settings):
+    seed_xp(engine, hours=2)
+    store_activities(engine, settings, parse_profile(load_json("runemetrics_profile_synthetic.json")).activities, RunResult())
+    kills = client.get("/api/bosses/kills", params={"range": "all", "bucket": "day"}).json()
+    raksha = next(s for s in kills["series"] if s["name"] == "Raksha, the Shadow Colossus")
+    day = kills["buckets"].index("2026-10-13")
+    assert raksha["data"][day] == 11
+    totals = {t["boss"]: t["kills"] for t in client.get("/api/bosses/totals").json()}
+    assert totals == {"Raksha, the Shadow Colossus": 11, "Kalphite King": 8}
+    ev = client.get("/api/events", params={"type": "level_up"}).json()
+    assert ev[0]["subject"] == "Necromancy" and ev[0]["value"] == 103 and ev[0]["time"].endswith("+02:00")
+    assert "Raksha" in client.get("/api/export/events.csv").text
+    assert client.get("/admin/unparsed").status_code == 200
+    assert client.get("/events").status_code == 200
+
+
+def test_health_reports_failed_latest_run(client, engine):
+    with engine.begin() as conn:
+        conn.execute(text("""INSERT INTO ingestion_runs (source, started_at, finished_at, status, rows_inserted, error) VALUES
+            ('xp', now() - interval '10 minutes', now() - interval '10 minutes', 'ok', 30, NULL),
+            ('adventure_log', now() - interval '10 minutes', now() - interval '10 minutes', 'ok', 2, NULL),
+            ('adventure_log', now(), now(), 'failed', 0, 'ProfilePrivate: RuneMetrics error: PROFILE_PRIVATE')"""))
+    h = client.get("/health").json()
+    assert h["status"] == "degraded" and h["profile_private"] is True
+    assert h["jobs"]["adventure_log"]["failing"] and not h["jobs"]["xp"]["failing"]
+    assert "profile is private" in client.get("/status").text

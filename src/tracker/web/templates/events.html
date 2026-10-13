@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Adventure log{% endblock %}
+{% block content %}
+<h1>Adventure log</h1>
+<div class="filters">
+  <label>Type <select id="type"><option value="">All</option>{% for t, n in event_types %}<option value="{{ t }}">{{ t }} ({{ n }})</option>{% endfor %}</select></label>
+  <label>Subject <input id="subject" placeholder="exact, e.g. Vorago" size="18"></label>
+  <label>From <input id="start" type="date"></label>
+  <label>To <input id="end" type="date"></label>
+  <button type="button" id="apply">Apply</button>
+  <a id="export" href="/api/export/events.csv">Export CSV</a>
+</div>
+<div class="panel table-wrap">
+  <table id="events"><thead><tr><th>Time</th><th>Type</th><th>Subject</th><th class="num">Count</th><th class="num">Value</th><th>Log entry (raw)</th></tr></thead><tbody></tbody></table>
+  <div class="filters" style="margin-top:10px"><button type="button" id="prev">‹ Newer</button><button type="button" id="next">Older ›</button><span class="note" id="pageinfo"></span></div>
+</div>
+{% endblock %}
+{% block scripts %}<script>document.addEventListener("DOMContentLoaded", () => Tracker.eventsPage());</script>{% endblock %}

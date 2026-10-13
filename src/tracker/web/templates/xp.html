@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}XP{% endblock %}
+{% block content %}
+<h1>XP</h1>
+<div class="filters" id="xp-filters">
+  <label>Skill <select id="skill">{% for sid, name in skills.items() %}<option value="{{ sid }}">{{ name }}</option>{% endfor %}</select></label>
+  <div class="seg" id="range" role="group" aria-label="Range">{% for r in ranges %}<button type="button" data-value="{{ r }}">{{ r }}</button>{% endfor %}</div>
+  <label>Gains per <select id="bucket"><option>hour</option><option selected>day</option><option>week</option><option>month</option></select></label>
+  <a id="export" href="/api/export/xp.csv">Export CSV</a>
+</div>
+<div class="cards">
+  <div class="card"><div class="label">XP gained (range)</div><div class="value" id="st-gained">—</div></div>
+  <div class="card"><div class="label">Average XP / hour</div><div class="value" id="st-rate">—</div></div>
+  <div class="card"><div class="label">Best day (all time)</div><div class="value" id="st-best">—</div><div class="sub" id="st-best-date"></div></div>
+  <div class="card"><div class="label">Gain streak</div><div class="value" id="st-streak">—</div><div class="sub">consecutive days with XP</div></div>
+</div>
+<div class="panel"><h2 id="series-title">Total XP</h2><div class="chart" id="chart-series"></div></div>
+<div class="panel"><h2 id="gains-title">XP gained</h2><div class="chart" id="chart-gains"></div>
+  <p class="note">Bars: XP gained per period. Line: 7-period moving average.</p></div>
+<div class="panel"><h2>Top skills (range)</h2><div class="chart tall" id="chart-top"></div></div>
+{% endblock %}
+{% block scripts %}<script>document.addEventListener("DOMContentLoaded", () => Tracker.xpPage());</script>{% endblock %}

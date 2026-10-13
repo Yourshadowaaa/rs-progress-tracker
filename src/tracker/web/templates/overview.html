@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+{% if has_data %}
+{% set overall = levels | selectattr('skill_id', 'equalto', -1) | first %}
+<div class="cards">
+  {% if overall %}
+  <div class="card"><div class="label">Total XP</div><div class="value">{{ "{:,}".format(overall.xp) }}</div>
+    <div class="sub">+{{ "{:,}".format(overall.gained_7d) }} last 7 days</div></div>
+  <div class="card"><div class="label">Total level</div><div class="value">{{ "{:,}".format(overall.level) }}</div>
+    <div class="sub">{% if overall.rank %}Rank {{ "{:,}".format(overall.rank) }}{% else %}Unranked{% endif %}</div></div>
+  {% endif %}
+  <div class="card"><div class="label">Boss kills this week</div><div class="value">{{ cards.kills_this_week }}</div>
+    <div class="sub">{{ cards.top_boss_this_week or '—' }}</div></div>
+  <div class="card"><div class="label">Level-ups this month</div><div class="value">{{ cards.level_ups_this_month }}</div>
+    <div class="sub"><a href="/events?type=level_up">view</a></div></div>
+</div>
+<div class="panel">
+  <h2>Skills</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Skill</th><th class="num">Level</th><th class="num">XP</th><th class="num">+7d</th>
+      <th>Progress to next</th><th class="num">XP to next</th><th class="num">Est. next</th><th class="num">Est. 99</th><th class="num">Est. 120</th><th class="num">Rank</th></tr></thead>
+    <tbody>
+    {% for r in levels if r.skill_id != -1 %}
+      <tr>
+        <td><a href="/xp?skill={{ r.skill_id }}">{{ r.skill }}</a></td>
+        <td class="num">{{ r.level }}{% if r.virtual_level and r.virtual_level > r.level %} <span class="muted">({{ r.virtual_level }})</span>{% endif %}</td>
+        <td class="num">{{ "{:,}".format(r.xp) }}</td>
+        <td class="num">{% if r.gained_7d %}+{{ "{:,}".format(r.gained_7d) }}{% else %}<span class="muted">0</span>{% endif %}</td>
+        <td>{% if r.progress_pct is not none %}<div class="bar" title="{{ r.progress_pct }}%" role="img" aria-label="{{ r.progress_pct }}% to level {{ r.next_level }}"><span style="width: {{ r.progress_pct }}%"></span></div>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="num">{{ "{:,}".format(r.xp_to_next) if r.xp_to_next is not none else '—' }}</td>
+        <td class="num">{{ r.eta_next or '—' }}</td>
+        <td class="num">{{ r.eta_99 or '—' }}</td>
+        <td class="num">{{ r.eta_120 or '—' }}</td>
+        <td class="num">{{ "{:,}".format(r.rank) if r.rank else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="note">Projections use the trailing 7-day XP rate (30-day if the last week was flat). Levels in parentheses are virtual levels from XP. Invention uses the elite XP curve and shows no projection.</p>
+</div>
+{% endif %}
+{% endblock %}

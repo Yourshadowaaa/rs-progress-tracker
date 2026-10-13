@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Bosses{% endblock %}
+{% block content %}
+<h1>Boss kills</h1>
+<div class="filters">
+  <label>Boss <select id="boss"><option value="">All bosses</option></select></label>
+  <div class="seg" id="range" role="group" aria-label="Range">{% for r in ranges if r != '24h' %}<button type="button" data-value="{{ r }}">{{ r }}</button>{% endfor %}</div>
+  <label>Per <select id="bucket"><option selected>day</option><option>week</option><option>month</option></select></label>
+  <a href="/api/export/events.csv?type=boss_kill">Export CSV</a>
+</div>
+<div class="panel"><h2>Kills per period</h2><div class="chart tall" id="chart-kills"></div></div>
+<div class="grid2">
+  <div class="panel"><h2>Cumulative kills (range)</h2><div class="chart" id="chart-cumulative"></div></div>
+  <div class="panel"><h2>Totals (range)</h2><div class="table-wrap"><table id="totals"><thead><tr><th>Boss</th><th class="num">Kills</th></tr></thead><tbody></tbody></table></div></div>
+</div>
+<p class="note">Kill counts come from adventure log entries. An entry's time is when the game wrote it, not necessarily when each kill happened, so a batch such as "I killed 11 Raksha" is counted entirely at that entry's time.</p>
+{% endblock %}
+{% block scripts %}<script>document.addEventListener("DOMContentLoaded", () => Tracker.bossPage());</script>{% endblock %}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ player }}{% endblock %} · RS3 Tracker</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js" defer></script>
+<script src="/static/app.js" defer></script>
+</head>
+<body data-tz="{{ tz }}">
+<header class="top">
+  <span class="brand">{{ player }}</span>
+  <nav>
+    <a href="/" class="{{ 'active' if active == 'overview' }}">Overview</a>
+    <a href="/xp" class="{{ 'active' if active == 'xp' }}">XP</a>
+    <a href="/bosses" class="{{ 'active' if active == 'bosses' }}">Bosses</a>
+    <a href="/events" class="{{ 'active' if active == 'events' }}">Adventure log</a>
+    <a href="/admin/unparsed" class="{{ 'active' if active == 'unparsed' }}">Unparsed</a>
+    <a href="/status" class="{{ 'active' if active == 'status' }}">Status</a>
+  </nav>
+  <span class="fresh">
+    {% if last_updated %}Updated {{ last_updated[:16] | replace('T', ' ') }}{% else %}No data yet{% endif %}
+    <a href="/status" class="pill {{ 'ok' if health_status == 'ok' else 'bad' }}"><span class="dot"></span>{{ 'Healthy' if health_status == 'ok' else 'Degraded' }}</a>
+  </span>
+</header>
+<main>
+{% if profile_private %}
+<div class="banner">⚠ Adventure log unavailable: the RuneMetrics profile is private. Turn on RuneMetrics profile visibility in-game, or log entries will be lost.</div>
+{% endif %}
+{% if not has_data %}
+<div class="panel empty">No data yet. The first hourly run will populate this dashboard.</div>
+{% endif %}
+{% block content %}{% endblock %}
+<p class="note">Times shown in {{ tz }}. Data from public Jagex hiscores (m={{ hiscore_table }}) and RuneMetrics.</p>
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

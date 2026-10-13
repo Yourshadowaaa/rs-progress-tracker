@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Unparsed{% endblock %}
+{% block content %}
+<h1>Parser report</h1>
+{% if report %}
+<div class="cards">
+  <div class="card"><div class="label">Events</div><div class="value">{{ report.total_events }}</div></div>
+  <div class="card"><div class="label">Unparsed rate</div><div class="value">{{ '%.1f' % (report.unparsed_rate * 100) }}%</div><div class="sub">target &lt; 5%</div></div>
+</div>
+<div class="panel"><h2>Unparsed entries</h2>
+  {% if report.unparsed %}<div class="table-wrap"><table><thead><tr><th>Text</th><th>Details</th><th class="num">Seen</th><th>Last</th></tr></thead><tbody>
+  {% for u in report.unparsed %}<tr><td>{{ u.text }}</td><td class="muted">{{ u.details }}</td><td class="num">{{ u.occurrences }}</td><td class="num">{{ u.last_seen[:16] | replace('T',' ') }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="muted">Nothing unparsed.</p>{% endif %}
+  <p class="note">Add a rule in <code>src/tracker/parser/rules.py</code> and a corpus line in <code>tests/fixtures/log_corpus.jsonl</code>, bump <code>PARSER_VERSION</code>, deploy, then run <code>python -m tracker.jobs reparse</code>.</p>
+</div>
+<div class="panel"><h2>Unrecognised subjects</h2>
+  {% if report.unknown_subjects %}<div class="table-wrap"><table><thead><tr><th>Type</th><th>Subject</th><th class="num">Entries</th><th class="num">Total count</th></tr></thead><tbody>
+  {% for u in report.unknown_subjects %}<tr><td><span class="tag">{{ u.event_type }}</span></td><td>{{ u.subject }}</td><td class="num">{{ u.entries }}</td><td class="num">{{ u.total_count }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="muted">All boss and skill names are recognised.</p>{% endif %}
+  <p class="note">Unrecognised boss names still count as kills under their raw name. Add them to <code>BOSSES</code> or <code>BOSS_ALIASES</code> in <code>reference.py</code> to group them.</p>
+</div>
+{% endif %}
+{% endblock %}
