@@ -314,7 +314,7 @@ def health(conn: Connection, tz: str) -> dict:
 
 def run_history(conn: Connection, tz: str, limit: int = 100) -> list[dict]:
     return [{"source": r[0], "started": iso_local(r[1], tz), "finished": iso_local(r[2], tz) if r[2] else None,
-             "status": r[3], "rows": r[4], "warning": r[5], "error": r[6]}
+             "status": r[3], "rows": r[4], "warning": r[5], "error": r[6], "trigger": r[7]}
             for r in conn.execute(text("""
-                SELECT source, started_at, finished_at, status, rows_inserted, warning, error
-                FROM ingestion_runs ORDER BY started_at DESC LIMIT :l"""), {"l": limit})]
+                SELECT source, started_at, finished_at, status, rows_inserted, warning, error, trigger
+                FROM ingestion_runs ORDER BY started_at DESC, id DESC LIMIT :l"""), {"l": limit})]

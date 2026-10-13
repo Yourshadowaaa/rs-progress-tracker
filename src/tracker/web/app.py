@@ -29,6 +29,10 @@ app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 log = logging.getLogger("tracker.web")
 
+from . import admin  # noqa: E402  (router needs `app`, `page` defined lazily)
+
+app.include_router(admin.router)
+
 
 def _db_target() -> str:
     """Host/port/database of DATABASE_URL, without credentials, for diagnostics."""
@@ -117,7 +121,7 @@ def page(request: Request, name: str, conn: Connection, **extra) -> HTMLResponse
         "player": player, "tz": tz, "hiscore_table": get_settings().hiscore_table, "has_data": pid is not None,
         "last_updated": q.iso_local(updated, tz) if updated else None,
         "health_status": health["status"], "profile_private": health["profile_private"],
-        "skills": ALL_SKILLS, "ranges": list(q.RANGES), **extra,
+        "skills": ALL_SKILLS, "ranges": list(q.RANGES), "admin_enabled": admin.admin_enabled(), **extra,
     })
 
 

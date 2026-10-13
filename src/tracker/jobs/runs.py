@@ -62,10 +62,10 @@ def recent_successful_run(engine: Engine, source: str, within: timedelta) -> boo
 
 
 @contextmanager
-def tracked_run(engine: Engine, source: str) -> Iterator[RunResult]:
+def tracked_run(engine: Engine, source: str, trigger: str = "cron") -> Iterator[RunResult]:
     """Record a run. Exceptions are caught, logged and stored; they never propagate."""
     with session_scope(engine) as s:
-        run = IngestionRun(source=source, started_at=datetime.now(UTC), status="running")
+        run = IngestionRun(source=source, started_at=datetime.now(UTC), status="running", trigger=trigger)
         s.add(run)
         s.flush()
         run_id = run.id
@@ -89,6 +89,13 @@ def tracked_run(engine: Engine, source: str) -> Iterator[RunResult]:
             )
         log.info(
             "job %s finished: %s", source, result.status,
-            extra={"extra_fields": {"job": source, "status": result.status, "rows": result.rows_inserted,
+            extra={"extra_fields": {"job": source, "trigger": trigger, "status": result.status, "rows": result.rows_inserted,
                                     "warnings": result.warnings, "error": result.error}},
         )
+
+
+def record_skipped(engine: Engine, source: str, trigger: str, reason: str) -> None:
+    now = datetime.now(UTC)
+    with session_scope(engine) as s:
+        s.add(IngestionRun(source=source, started_at=now, finished_at=now, status="skipped",
+                           trigger=trigger, warning=reason))

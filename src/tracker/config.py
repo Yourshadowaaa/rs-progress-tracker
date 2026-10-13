@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Minimum minutes between runs of the same job; protects against double-fired crons.
     min_run_interval_min: int = 50
 
+    # Force-update button (/admin). Disabled unless ADMIN_PASSWORD is set.
+    admin_username: str = "admin"
+    admin_password: str | None = None
+    force_update_cooldown_min: int = 5
+
     # Backups (optional): pg_dump once a day at BACKUP_HOUR_UTC to S3 and/or a local dir.
     backup_hour_utc: int = 3
     backup_retention_days: int = 30

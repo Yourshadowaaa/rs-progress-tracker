@@ -156,7 +156,7 @@ def test_reparse_is_deterministic_and_does_not_duplicate(engine, settings):
 
 @respx.mock
 def test_run_all_twice_is_idempotent(engine, settings, monkeypatch):
-    import tracker.jobs.__main__ as cli
+    import tracker.jobs.runner as cli
 
     respx.get(HISCORES).mock(return_value=httpx.Response(200, text=load_fixture("hiscores_ironman_synthetic.csv")))
     respx.get(PROFILE).mock(return_value=httpx.Response(200, json=load_json("runemetrics_profile_synthetic.json")))

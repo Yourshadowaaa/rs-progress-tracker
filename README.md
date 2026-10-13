@@ -28,6 +28,7 @@ Both services build from the same `Dockerfile`.
   so a fresh Railway Postgres needs no manual setup. If the database is unreachable or the tables are
   missing, every page shows the cause and the fix (HTTP 503) instead of a bare error. The cron job
   refuses to run if the schema is behind.
+- **Read-only by default.** The only write action is the optional, password-protected force update.
 - **Failures** never crash-loop. Each job records a `failed` row in `ingestion_runs` (shown on
   `/status` and `/health`) and the process exits 0. There is no external alerting, by design.
 
@@ -81,6 +82,9 @@ Both services build from the same `Dockerfile`.
 | `USER_AGENT` | `rs-progress-tracker/0.1 (...)` | Identifiable UA sent to Jagex |
 | `HTTP_RETRIES` | `3` | Attempts per request (backoff 2 s, 4 s) |
 | `MIN_RUN_INTERVAL_MIN` | `50` | Double-fire guard |
+| `ADMIN_PASSWORD` | unset | Turns on the **Force update** button at `/admin`. Unset means the feature is off (404) |
+| `ADMIN_USERNAME` | `admin` | Username for `/admin` |
+| `FORCE_UPDATE_COOLDOWN_MIN` | `5` | Minimum minutes between force updates |
 | `BACKUP_DIR` / `BACKUP_S3_*` | unset | See Backups |
 
 ### Backups
@@ -132,6 +136,27 @@ Don't use `railway run`: it runs on your own machine, which can't reach the priv
 | Page says `schema_missing` | Migrations didn't run; check the deploy logs for the `alembic upgrade head` error, or run it in the web shell |
 | `/status` shows no runs | The `ingest` service doesn't exist yet, or isn't using `railway.cron.json` (no cron schedule) |
 | Deploy fails its healthcheck | The app isn't starting at all; check the deploy logs. The healthcheck is `/livez`, which doesn't use the database |
+
+### Force update button
+
+Set `ADMIN_PASSWORD` (and optionally `ADMIN_USERNAME`) on the **web** service in Railway → Variables,
+using a long random password. A **Force update** button then appears on `/status` and links to `/admin`.
+The browser asks for the username and password (HTTP Basic auth; Railway serves the site over HTTPS).
+
+A force update runs both jobs immediately, in the web service:
+- It replaces the current hour's XP snapshot with fresh values, so there is still one snapshot per
+  hour and gains stay consistent.
+- It stores any new adventure log entries. Forcing before a long session ends also lowers the risk
+  of missing log entries.
+
+Safeguards:
+- A Postgres advisory lock stops it from overlapping the hourly cron run. If one is running, the force
+  update is recorded as `skipped`.
+- It is allowed once every `FORCE_UPDATE_COOLDOWN_MIN` minutes.
+- The form carries a CSRF token.
+- Runs show their trigger (`cron`, `manual`, `cli`) on `/status`.
+
+To turn the feature off, delete the variable and redeploy.
 
 ### Improving the parser
 

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block head %}{% if running %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block content %}
+<h1>Admin</h1>
+{% set messages = {
+  'started': ('ok', '✓ Force update started. This page refreshes until it finishes.'),
+  'busy': ('warn', '! A force update is already running.'),
+  'cooldown': ('warn', '! Too soon: wait for the cooldown before forcing another update.'),
+} %}
+{% if message in messages %}
+<div class="panel"><span class="pill {{ messages[message][0] }}"><span class="dot"></span>{{ messages[message][1] }}</span></div>
+{% endif %}
+<div class="panel">
+  <h2>Force update</h2>
+  <p>Fetch the hiscores and the adventure log now instead of waiting for the next hourly run.
+     This replaces the current hour's XP snapshot with fresh values and stores any new log entries.</p>
+  <form method="post" action="/admin/refresh">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit" class="primary" {% if running or cooldown_s %}disabled{% endif %}>
+      {% if running %}Updating…{% elif cooldown_s %}Available in {{ (cooldown_s // 60) }}m {{ cooldown_s % 60 }}s{% else %}Force update{% endif %}
+    </button>
+  </form>
+  <p class="note">Signed in as {{ user }}. Limited to one force update every {{ cooldown_min }} minutes to stay polite to Jagex's servers.</p>
+</div>
+<div class="panel table-wrap"><h2>Latest runs</h2>
+<table><thead><tr><th>Job</th><th>Trigger</th><th>Started</th><th>Status</th><th class="num">Rows</th><th>Warning / error</th></tr></thead><tbody>
+{% for r in runs %}
+<tr><td>{{ r.source }}</td><td><span class="tag">{{ r.trigger }}</span></td><td class="num">{{ r.started[:16] | replace('T',' ') }}</td>
+  <td class="status-{{ r.status }}">{{ {'ok': '✓', 'failed': '✕', 'partial': '!', 'running': '…', 'skipped': '–'}.get(r.status, '') }} {{ r.status }}</td>
+  <td class="num">{{ r.rows }}</td><td>{{ r.error or r.warning or '' }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">No runs yet.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

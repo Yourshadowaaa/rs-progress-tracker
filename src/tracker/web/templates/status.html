@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Status{% endblock %}
 {% block content %}
-<h1>Ingestion status</h1>
+<div class="filters" style="justify-content: space-between"><h1 style="margin:0">Ingestion status</h1>{% if admin_enabled %}<a class="button primary" href="/admin">Force update</a>{% endif %}</div>
 <div class="cards">
 {% for name, j in health.jobs.items() %}
   <div class="card"><div class="label">{{ name }}</div>
@@ -14,10 +14,10 @@
 {% endfor %}
 </div>
 <div class="panel table-wrap"><h2>Recent runs</h2>
-<table><thead><tr><th>Job</th><th>Started</th><th>Status</th><th class="num">Rows</th><th>Warning / error</th></tr></thead><tbody>
+<table><thead><tr><th>Job</th><th>Trigger</th><th>Started</th><th>Status</th><th class="num">Rows</th><th>Warning / error</th></tr></thead><tbody>
 {% for r in runs %}
-<tr><td>{{ r.source }}</td><td class="num">{{ r.started[:16] | replace('T',' ') }}</td>
-  <td class="status-{{ r.status }}">{{ {'ok': '✓', 'failed': '✕', 'partial': '!', 'running': '…'}.get(r.status, '') }} {{ r.status }}</td>
+<tr><td>{{ r.source }}</td><td><span class="tag">{{ r.trigger }}</span></td><td class="num">{{ r.started[:16] | replace('T',' ') }}</td>
+  <td class="status-{{ r.status }}">{{ {'ok': '✓', 'failed': '✕', 'partial': '!', 'running': '…', 'skipped': '–'}.get(r.status, '') }} {{ r.status }}</td>
   <td class="num">{{ r.rows }}</td><td>{{ r.error or r.warning or '' }}</td></tr>
 {% endfor %}
 </tbody></table></div>

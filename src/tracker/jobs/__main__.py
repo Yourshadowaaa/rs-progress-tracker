@@ -11,7 +11,6 @@ Commands:
 import argparse
 import json
 import sys
-from datetime import UTC, datetime, timedelta
 
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
@@ -23,8 +22,9 @@ from ..config import get_settings
 from ..db import get_engine, session_scope
 from ..models import AdventureLogRaw
 from .adventure_log import reparse, run_log_job
-from .backup import backup_configured, run_backup
-from .runs import configure_logging, log, recent_successful_run, tracked_run
+from .backup import run_backup
+from .runner import run_all
+from .runs import configure_logging, log, tracked_run
 from .xp_snapshot import run_xp_job
 
 
@@ -40,23 +40,6 @@ def check_schema(engine: Engine) -> None:
         current = MigrationContext.configure(conn).get_current_revision()
     if current != head:
         raise SystemExit(f"database schema at {current}, code expects {head}: run `alembic upgrade head`")
-
-
-def run_all(engine: Engine, force: bool = False) -> None:
-    settings = get_settings()
-    window = timedelta(minutes=settings.min_run_interval_min)
-    with make_client() as client:
-        for source, job in (("xp", run_xp_job), ("adventure_log", run_log_job)):
-            if not force and recent_successful_run(engine, source, window):
-                log.info("skipping %s: successful run within the last %s", source, window)
-                continue
-            with tracked_run(engine, source) as result:
-                job(engine, settings, client, result)
-    now = datetime.now(UTC)
-    if backup_configured(settings) and now.hour == settings.backup_hour_utc:
-        if force or not recent_successful_run(engine, "backup", timedelta(hours=20)):
-            with tracked_run(engine, "backup") as result:
-                run_backup(settings, result)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -77,13 +60,13 @@ def main(argv: list[str] | None = None) -> int:
     engine = get_engine()
     check_schema(engine)
     if args.command == "run-all":
-        run_all(engine, force=args.force)
+        run_all(engine, force=args.force, trigger="cli" if args.force else "cron")
     elif args.command in ("xp", "log"):
         source, job = ("xp", run_xp_job) if args.command == "xp" else ("adventure_log", run_log_job)
-        with make_client() as client, tracked_run(engine, source) as result:
+        with make_client() as client, tracked_run(engine, source, "cli") as result:
             job(engine, settings, client, result)
     elif args.command == "backup":
-        with tracked_run(engine, "backup") as result:
+        with tracked_run(engine, "backup", "cli") as result:
             run_backup(settings, result)
     elif args.command == "reparse":
         entries, events = reparse(engine, everything=args.all)

@@ -86,6 +86,7 @@ class IngestionRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(Text)  # running | ok | partial | failed | skipped
+    trigger: Mapped[str] = mapped_column(Text, default="cron")  # cron | manual | cli
     rows_inserted: Mapped[int] = mapped_column(Integer, default=0)
     warning: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

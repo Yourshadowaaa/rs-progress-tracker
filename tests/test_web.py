@@ -44,9 +44,24 @@ def test_empty_database_pages_render(client):
     assert client.get("/api/levels").status_code == 404
 
 
-def test_only_get_routes_exist():
-    for route in web.app.routes:
-        assert set(getattr(route, "methods", None) or {"GET"}) <= {"GET", "HEAD"}, route.path
+def walk_routes(routes):
+    for r in routes:
+        if hasattr(r, "path"):
+            yield r
+        sub = getattr(r, "routes", None) or getattr(getattr(r, "original_router", None), "routes", None)
+        if sub:
+            yield from walk_routes(sub)
+
+
+def test_only_get_routes_exist_except_force_update():
+    routes = list(walk_routes(web.app.routes))
+    assert any(r.path == "/admin/refresh" for r in routes)
+    for route in routes:
+        methods = set(getattr(route, "methods", None) or {"GET"})
+        if route.path == "/admin/refresh":
+            assert methods == {"POST"}
+        else:
+            assert methods <= {"GET", "HEAD"}, route.path
 
 
 def test_xp_endpoints(client, engine):

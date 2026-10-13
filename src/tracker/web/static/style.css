@@ -68,3 +68,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .empty { padding: 30px; text-align: center; color: var(--text-muted); }
 .status-ok { color: var(--good); } .status-failed { color: var(--critical); } .status-partial { color: var(--warning); }
 code { font-size: 13px; }
+button.primary, a.button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
+  padding: 7px 14px; border-radius: 6px; cursor: pointer; display: inline-block; }
+a.button.primary:hover { text-decoration: none; filter: brightness(1.1); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+.status-skipped { color: var(--text-muted); }
