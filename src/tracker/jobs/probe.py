@@ -26,7 +26,7 @@ def run_probe(out_dir: str = "probe_output") -> None:
     out.mkdir(parents=True, exist_ok=True)
     report: list[str] = [f"probe at {datetime.now(UTC).isoformat()} for {s.player_name!r}"]
     with make_client() as client:
-        for table in ("hiscore_ironman", "hiscore_hardcore_ironman", "hiscore"):
+        for table in ("hiscore", "hiscore_ironman", "hiscore_hardcore_ironman"):
             for encoded in name_variants(s.player_name):
                 label = encoded
                 url = f"https://secure.runescape.com/m={table}/index_lite.ws?player={encoded}"

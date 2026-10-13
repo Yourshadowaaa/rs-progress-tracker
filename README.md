@@ -1,8 +1,9 @@
 # RS3 Progress Tracker
 
-A personal tracker for the RuneScape 3 ironman **Get Grouped**. Every hour it records:
+A personal tracker for the RuneScape 3 group ironman **Get Grouped**. Every hour it records:
 
-1. **XP snapshots** for every skill from the ironman hiscores (full history, never overwritten).
+1. **XP snapshots** for every skill from the hiscores (full history, never overwritten). Group
+   ironmen are only ranked on the regular table, so that is the default.
 2. **The adventure log** from RuneMetrics. Raw entries are stored forever and parsed into structured
    events: boss kills with counts, level-ups, XP milestones, quests, drops, pets, clues and so on.
 
@@ -44,14 +45,16 @@ Both services build from the same `Dockerfile`.
 
 ### Data handling decisions
 
-- **XP source.** The table set by `HISCORE_TABLE` (default `hiscore_ironman`).
+- **XP source.** The table set by `HISCORE_TABLE`. The default is `hiscore`, the regular table:
+  group ironmen do not appear on the ironman tables.
   - **Name spellings.** Spaces in the name are tried as `%20`, `+`, `_` and `%A0` before treating
     the player as not found.
   - **Player not found (404).** The job never reads another hiscores table in its place. It checks
     the regular table once, only to say why in the run warning, then takes XP from RuneMetrics
     `skillvalues` (reported ×10; the job divides by 10). The run shows as `partial` on `/status`.
   - **Other hiscores errors** use the same RuneMetrics fallback.
-  - **Ranks.** RuneMetrics-sourced snapshots store no rank, because those would be regular-table ranks.
+  - **Ranks.** RuneMetrics ranks are regular-table ranks. They are kept when `HISCORE_TABLE=hiscore` and
+    dropped for the ironman tables.
   - **Snapshot time.** The run time truncated to the hour (UTC).
 - **Bad data.** An all-zero payload is rejected. An XP decrease is stored with `flag='xp_decrease'`
   and a warning.
@@ -82,7 +85,7 @@ Both services build from the same `Dockerfile`.
 |---|---|---|
 | `DATABASE_URL` | – | `${{Postgres.DATABASE_URL}}`; `postgres://` URLs are accepted |
 | `PLAYER_NAME` | `Get Grouped` | URL-encoded as `Get%20Grouped` |
-| `HISCORE_TABLE` | `hiscore_ironman` | `hiscore`, `hiscore_ironman` or `hiscore_hardcore_ironman` |
+| `HISCORE_TABLE` | `hiscore` | `hiscore` (regular; also group ironmen), `hiscore_ironman` or `hiscore_hardcore_ironman` |
 | `DISPLAY_TZ` | `Europe/Berlin` | |
 | `USER_AGENT` | `rs-progress-tracker/0.1 (...)` | Identifiable UA sent to Jagex |
 | `HTTP_RETRIES` | `3` | Attempts per request (backoff 2 s, 4 s) |

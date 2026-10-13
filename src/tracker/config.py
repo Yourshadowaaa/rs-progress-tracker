@@ -14,7 +14,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://localhost/rs_tracker"
     player_name: str = "Get Grouped"
-    hiscore_table: HiscoreTable = "hiscore_ironman"
+    # Group ironmen are only ranked on the regular table, so "hiscore" is the default here.
+    hiscore_table: HiscoreTable = "hiscore"
     display_tz: str = "Europe/Berlin"
     user_agent: str = "rs-progress-tracker/0.1 (personal hourly tracker; one request per source per hour)"
     http_timeout_s: float = 20.0

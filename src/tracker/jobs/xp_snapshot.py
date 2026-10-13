@@ -41,7 +41,9 @@ def _runemetrics_rows(client: httpx.Client, settings: Settings, reason: Exceptio
     profile = fetch_profile(client, settings.player_name)
     if not profile.skills:
         raise UpstreamError("RuneMetrics fallback returned no skill values") from reason
-    # RuneMetrics ranks are regular-hiscores ranks; don't mix them into an ironman rank history.
+    if settings.hiscore_table == "hiscore":
+        return profile.skills
+    # RuneMetrics ranks are regular-hiscores ranks; don't mix them into an ironman-table rank history.
     return [SkillRow(r.skill_id, r.level, r.xp, None) for r in profile.skills]
 
 
@@ -58,8 +60,8 @@ def fetch_skill_rows(client: httpx.Client, settings: Settings, result: RunResult
         if table != "hiscore":
             on_regular = _on_table(client, "hiscore", name)
             if on_regular:
-                hint = (" The player IS on the regular hiscores (m=hiscore): the account may no longer be an "
-                        "ironman, or HISCORE_TABLE is wrong.")
+                hint = (" The player IS on the regular hiscores (m=hiscore). Group ironmen and former ironmen "
+                        "are only ranked there: set HISCORE_TABLE=hiscore.")
             elif on_regular is False:
                 hint = (" The player is not on the regular hiscores either: the name may be wrong or the "
                         "account is not ranked in any skill yet.")
@@ -68,11 +70,10 @@ def fetch_skill_rows(client: httpx.Client, settings: Settings, result: RunResult
         except UpstreamError as rm_exc:
             raise TableMismatch(f"'{name}' not found on m={table} ({exc}).{hint} RuneMetrics fallback also "
                                 f"failed: {rm_exc}") from exc
-        result.warn(f"'{name}' not found on m={table} ({exc}).{hint} XP taken from RuneMetrics instead "
-                    "(no ranks stored).")
+        result.warn(f"'{name}' not found on m={table} ({exc}).{hint} XP taken from RuneMetrics instead.")
         return rows, "runemetrics"
     except UpstreamError as exc:
-        result.warn(f"hiscores failed ({exc}); used RuneMetrics fallback (no ranks stored)")
+        result.warn(f"hiscores failed ({exc}); used RuneMetrics fallback")
         return _runemetrics_rows(client, settings, exc), "runemetrics"
 
 

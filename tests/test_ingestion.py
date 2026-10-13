@@ -217,3 +217,23 @@ def test_profile_private_recorded_as_failed_run(engine, settings):
     with httpx.Client() as client, tracked_run(engine, "adventure_log") as result:
         run_log_job(engine, settings, client, result)
     assert result.status == "failed" and "PROFILE_PRIVATE" in result.error
+
+
+def test_default_table_is_regular_for_group_ironman(monkeypatch):
+    from tracker.config import Settings
+
+    monkeypatch.delenv("HISCORE_TABLE", raising=False)
+    assert Settings(_env_file=None).hiscore_table == "hiscore"
+
+
+@respx.mock
+def test_regular_table_fallback_keeps_runemetrics_ranks(engine, settings):
+    regular = settings.model_copy(update={"hiscore_table": "hiscore"})
+    respx.get(hiscores_url("hiscore", "Get Grouped")).mock(return_value=httpx.Response(503))
+    data = load_json("runemetrics_profile_synthetic.json")
+    respx.get(PROFILE).mock(return_value=httpx.Response(200, json=data))
+    with httpx.Client() as client:
+        run_xp_job(engine, regular, client, RunResult(), now=NOW)
+    with engine.connect() as conn:
+        rank = conn.execute(select(XpSnapshot.rank).where(XpSnapshot.skill_id == 0)).scalar()
+    assert rank == data["skillvalues"][0]["rank"]
