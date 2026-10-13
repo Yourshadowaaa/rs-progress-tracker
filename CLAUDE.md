@@ -39,7 +39,8 @@ Railway project
 ```
 
 - One `Dockerfile` serves both services.
-- Deploys come from the git branch `claude/fervent-wozniak-ph7gpa`, the only branch so far.
+- Railway deploys from **`master`**: every push to `master` goes live on both services. Work on a
+  feature branch and merge (or push) to `master` when it is ready; run the full test suite first.
 - Stack: Python 3.12, uv, FastAPI, Jinja2 templates, Apache ECharts 5.5.1 from the jsdelivr CDN,
   SQLAlchemy 2 Core/ORM, Alembic, psycopg 3, httpx, pytest + respx.
 
