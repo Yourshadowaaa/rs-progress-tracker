@@ -183,7 +183,7 @@ def test_overview_marks_levels_gained_today(client, engine):
             conn.execute(text("INSERT INTO xp_snapshots (player_id, skill_id, captured_at_utc, xp, level, source) "
                               "VALUES (1, 0, :t, :xp, :lvl, 'hiscores')"), {"t": t, "xp": xp, "lvl": lvl})
     assert client.get("/api/levels").json()[0]["levels_today"] == 2
-    assert '<span class="level-up" title="2 levels gained">+2</span>' in client.get("/").text
+    assert '<td class="num">72 <span class="level-up" title="2 levels gained today">+2</span>' in client.get("/").text
 
 
 def test_day_gains_use_local_calendar_days(engine):

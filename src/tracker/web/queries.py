@@ -157,7 +157,6 @@ class LevelRow:
     gained_yesterday: int
     gained_7d: int
     levels_today: int
-    levels_yesterday: int
 
 
 def levels_table(conn: Connection, pid: int, tz: str) -> list[LevelRow]:
@@ -169,13 +168,13 @@ def levels_table(conn: Connection, pid: int, tz: str) -> list[LevelRow]:
     rows = []
     for sid, level, xp, rank in latest:
         prog = level_progress(sid, xp)
-        today, yesterday, levels_today, levels_yesterday = days.get(sid, (0, 0, 0, 0))
+        today, yesterday, levels_today, _ = days.get(sid, (0, 0, 0, 0))
         rows.append(LevelRow(
             skill_id=sid, skill=ALL_SKILLS[sid], level=level, virtual_level=prog.level if prog else None, xp=xp,
             rank=rank, next_level=prog.next_level if prog else None, xp_to_next=prog.xp_to_next if prog else None,
             progress_pct=prog.progress_pct if prog else None,
             gained_today=today, gained_yesterday=yesterday, gained_7d=gains.get(sid, 0),
-            levels_today=levels_today, levels_yesterday=levels_yesterday,
+            levels_today=levels_today,
         ))
     rows.sort(key=lambda r: (r.skill_id != OVERALL_ID, r.skill_id))
     return rows
