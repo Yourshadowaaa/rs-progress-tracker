@@ -21,5 +21,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 RUN uv sync --frozen --no-dev
 
-# Default command is the web service; the ingest service overrides it (railway.cron.json).
-CMD ["sh", "-c", "uvicorn tracker.web.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+# Default command is the web service: apply migrations (idempotent), then serve. If migrations
+# fail (e.g. DATABASE_URL missing) the app still starts and explains the problem on every page.
+# The ingest service overrides this command (railway.cron.json).
+CMD ["sh", "-c", "alembic upgrade head || echo \"WARNING: migrations failed, see error above\"; exec uvicorn tracker.web.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]

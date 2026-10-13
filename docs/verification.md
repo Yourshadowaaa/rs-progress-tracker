@@ -10,7 +10,7 @@ until confirmed.
 
 ## First-deploy checklist
 
-Run `railway run --service ingest python -m tracker.jobs probe`, or run the probe locally from any
+Run `python -m tracker.jobs probe` in a shell on the web service (`railway ssh --service web`), or run the probe locally from any
 machine that can reach runescape.com. It writes `probe_output/report.txt` and the raw responses.
 Record the results here:
 

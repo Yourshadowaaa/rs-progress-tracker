@@ -5,9 +5,8 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "preDeployCommand": ["alembic upgrade head"],
-    "startCommand": "sh -c 'uvicorn tracker.web.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers'",
-    "healthcheckPath": "/health",
+    "startCommand": "sh -c 'alembic upgrade head || echo \"WARNING: migrations failed, see error above\"; exec uvicorn tracker.web.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers'",
+    "healthcheckPath": "/livez",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5

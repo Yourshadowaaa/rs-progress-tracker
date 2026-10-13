@@ -93,3 +93,52 @@ def test_health_reports_failed_latest_run(client, engine):
     assert h["status"] == "degraded" and h["profile_private"] is True
     assert h["jobs"]["adventure_log"]["failing"] and not h["jobs"]["xp"]["failing"]
     assert "profile is private" in client.get("/status").text
+
+
+@pytest.mark.parametrize("env_url,expected", [(True, "database_unreachable"), (False, "database_url_missing")])
+def test_unreachable_database_explains_itself(monkeypatch, env_url, expected):
+    from sqlalchemy import create_engine
+
+    if env_url:
+        monkeypatch.setenv("DATABASE_URL", "postgresql://u:secret@127.0.0.1:1/x")
+    else:
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+    engine = create_engine("postgresql+psycopg://u:secret@127.0.0.1:1/x", connect_args={"connect_timeout": 2})
+
+    def broken():
+        with engine.connect() as conn:
+            yield conn
+
+    web.app.dependency_overrides[web.get_conn] = broken
+    try:
+        c = TestClient(web.app, raise_server_exceptions=False)
+        page = c.get("/")
+        assert page.status_code == 503 and expected in page.text and "${{Postgres.DATABASE_URL}}" in page.text
+        assert "secret" not in page.text
+        health = c.get("/health")
+        assert health.status_code == 503 and health.json()["error"] == expected
+        assert c.get("/livez").status_code == 200
+    finally:
+        web.app.dependency_overrides.clear()
+
+
+def test_missing_schema_explains_itself(migrated_engine):
+    from sqlalchemy import create_engine
+
+    url = migrated_engine.url.set(database="rs_empty_schema")
+    with migrated_engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+        conn.execute(text("DROP DATABASE IF EXISTS rs_empty_schema"))
+        conn.execute(text("CREATE DATABASE rs_empty_schema"))
+    engine = create_engine(url)
+
+    def empty():
+        with engine.connect() as conn:
+            yield conn
+
+    web.app.dependency_overrides[web.get_conn] = empty
+    try:
+        r = TestClient(web.app, raise_server_exceptions=False).get("/")
+        assert r.status_code == 503 and "schema_missing" in r.text
+    finally:
+        web.app.dependency_overrides.clear()
+        engine.dispose()

@@ -24,7 +24,9 @@ Both services build from the same `Dockerfile`.
   are idempotent (`ON CONFLICT DO NOTHING`), and a guard skips a job that already succeeded in the
   last 50 minutes, so double fires and overlaps are harmless. The web service shows freshness
   from the `ingestion_runs` table.
-- **Migrations** run as the web service's pre-deploy command (`alembic upgrade head`). The cron job
+- **Migrations** run automatically when the web container starts (`alembic upgrade head`, idempotent),
+  so a fresh Railway Postgres needs no manual setup. If the database is unreachable or the tables are
+  missing, every page shows the cause and the fix (HTTP 503) instead of a bare error. The cron job
   refuses to run if the schema is behind.
 - **Failures** never crash-loop. Each job records a `failed` row in `ingestion_runs` (shown on
   `/status` and `/health`) and the process exits 0. There is no external alerting, by design.
@@ -67,7 +69,7 @@ Both services build from the same `Dockerfile`.
 3. Add a second service from the same repo and name it **ingest**:
    - Config file path `railway.cron.json` (sets cron `0 * * * *`, restart policy NEVER).
    - The same `DATABASE_URL` variable. No public domain.
-4. Deploy `web` first so its pre-deploy runs the migrations. Then trigger `ingest` once by hand
+4. Deploy `web` first so it creates the tables on start. Then trigger `ingest` once by hand
    ("Run now" or a redeploy) and check `/status`.
 
 | Variable | Default | Notes |
@@ -116,8 +118,20 @@ python -m tracker.jobs export-corpus    # stored log entries as JSONL, to grow t
 python -m tracker.jobs backup           # run a backup now
 ```
 
-On Railway, run these with `railway run --service ingest python -m tracker.jobs ...`, or from the
-service shell.
+On Railway, run these in a shell on the **web** service (`railway ssh --service web`, or the service
+shell in the dashboard). It uses the same image as `ingest`, which only runs for a few seconds each hour.
+Don't use `railway run`: it runs on your own machine, which can't reach the private
+`postgres.railway.internal` address.
+
+### Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| Page says `database_url_missing` | Add `DATABASE_URL = ${{Postgres.DATABASE_URL}}` to the service's Variables and redeploy |
+| Page says `database_unreachable` | Variable points to the wrong host, or Postgres is down; check it references the Postgres service |
+| Page says `schema_missing` | Migrations didn't run; check the deploy logs for the `alembic upgrade head` error, or run it in the web shell |
+| `/status` shows no runs | The `ingest` service doesn't exist yet, or isn't using `railway.cron.json` (no cron schedule) |
+| Deploy fails its healthcheck | The app isn't starting at all; check the deploy logs. The healthcheck is `/livez`, which doesn't use the database |
 
 ### Improving the parser
 

@@ -1,7 +1,10 @@
 """Public, read-only dashboard + JSON API. Only GET routes exist."""
 
 import csv
+import html
 import io
+import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterator
@@ -12,7 +15,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.exc import DBAPIError, OperationalError, ProgrammingError
 
 from ..config import get_settings
 from ..db import get_engine
@@ -23,6 +27,47 @@ HERE = Path(__file__).parent
 app = FastAPI(title="RS3 Progress Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
+log = logging.getLogger("tracker.web")
+
+
+def _db_target() -> str:
+    """Host/port/database of DATABASE_URL, without credentials, for diagnostics."""
+    try:
+        u = make_url(get_settings().database_url)
+        return f"{u.host or '?'}:{u.port or 5432}/{u.database or '?'}"
+    except Exception:  # noqa: BLE001
+        return "unparseable DATABASE_URL"
+
+
+def diagnose(exc: DBAPIError) -> tuple[str, str]:
+    """Map a database exception to (code, human hint). Never includes credentials."""
+    msg = str(exc.orig) if exc.orig is not None else str(exc)
+    if isinstance(exc, ProgrammingError) and "does not exist" in msg:
+        return ("schema_missing",
+                "The database is reachable but its tables do not exist yet. Redeploy the web service "
+                "(it runs `alembic upgrade head` on start) or run `alembic upgrade head` in its shell.")
+    if isinstance(exc, OperationalError):
+        fix = ("On Railway, add the variable DATABASE_URL = ${{Postgres.DATABASE_URL}} to this service "
+               "(and to the ingest service), then redeploy.")
+        if "DATABASE_URL" not in os.environ:
+            return ("database_url_missing", "The DATABASE_URL variable is not set. " + fix)
+        return ("database_unreachable", f"Cannot connect to the database at {_db_target()}. " + fix)
+    return ("database_error", f"Database error: {type(exc.orig or exc).__name__}. See the service logs.")
+
+
+@app.exception_handler(DBAPIError)
+def database_error(request: Request, exc: DBAPIError):
+    code, hint = diagnose(exc)
+    log.error("database error on %s: %s (%s)", request.url.path, code, exc.orig if exc.orig is not None else exc)
+    if request.url.path.startswith(("/api", "/health")):
+        return JSONResponse({"status": "error", "error": code, "hint": hint}, status_code=503)
+    body = (
+        "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+        "<title>Tracker unavailable</title><link rel=stylesheet href=/static/style.css>"
+        f"<main><h1>Tracker unavailable</h1><div class=panel><p><span class=tag>{code}</span></p>"
+        f"<p>{html.escape(hint)}</p></div></main>"
+    )
+    return HTMLResponse(body, status_code=503)
 
 
 def get_conn() -> Iterator[Connection]:
@@ -77,6 +122,13 @@ def page(request: Request, name: str, conn: Connection, **extra) -> HTMLResponse
 
 
 # ---------------------------------------------------------------- health
+
+
+@app.get("/livez")
+def livez() -> dict:
+    """Liveness only (no database): used as Railway's deploy healthcheck so a database problem
+    is reported on the site instead of silently blocking the deploy."""
+    return {"status": "alive"}
 
 
 @app.get("/health")
