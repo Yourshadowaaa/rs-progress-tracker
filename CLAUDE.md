@@ -113,7 +113,7 @@ Railway project
 - Must work at phone width (390px) without horizontal scroll.
 - Skill names are shown with their RuneScape Wiki icon (`SKILL_ICONS` in `reference.py`, hotlinked from
   `runescape.wiki/images/<Skill>-icon.png`): `skill_icon()` in templates, `skillIcon()` in `app.js`, rich-text
-  labels in ECharts. A failed image removes itself, so the wiki being down only drops the icons.
+  labels in ECharts. Overall's icon is bundled at `static/skills/overall.png`. A failed image removes itself, so the wiki being down only drops the icons.
 
 ## Working on it
 

@@ -21,6 +21,7 @@ SKILL_BY_NAME: dict[str, int] = {name.lower(): sid for sid, name in ALL_SKILLS.i
 # Skill icons are hotlinked from the RuneScape Wiki (Category:Skill_icons) by the viewer's browser.
 SKILL_ICON_BASE = "https://runescape.wiki/images"
 SKILL_ICONS: dict[str, str] = {name: f"{SKILL_ICON_BASE}/{name}-icon.png" for name in ALL_SKILLS.values()}
+SKILL_ICONS["Overall"] = "/static/skills/overall.png"  # bundled: the wiki has no "Overall-icon.png"
 # Invention is an "elite" skill with its own XP curve, which is not tabulated here, so the
 # next-level helpers return None for it rather than guess.
 ELITE_SKILLS = {26}

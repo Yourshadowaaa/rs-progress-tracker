@@ -69,6 +69,8 @@ def test_only_get_routes_exist_except_force_update():
 def test_xp_endpoints(client, engine):
     seed_xp(engine)
     levels = {r["skill"]: r for r in client.get("/api/levels").json()}
+    overview = client.get("/").text
+    assert '<tr class="total">' in overview and "6,094,000" in overview  # Overall XP as the Total row
     assert levels["Attack"]["xp"] == 1_047_000 and levels["Attack"]["gained_7d"] == 47_000
     day_buckets = {g["bucket"]: g["xp"] for g in client.get(
         "/api/xp/gains", params={"skill": 0, "range": "all", "bucket": "day"}).json()}
@@ -170,6 +172,7 @@ def test_skill_icon_markup():
     img = str(web.skill_icon("Runecrafting"))
     assert 'src="https://runescape.wiki/images/Runecrafting-icon.png"' in img and 'onerror="this.remove()"' in img
     assert str(web.skill_icon("Vorago")) == ""
+    assert 'src="/static/skills/overall.png"' in str(web.skill_icon("Overall"))
 
 
 def test_day_gains_use_local_calendar_days(engine):
