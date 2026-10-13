@@ -175,17 +175,29 @@ def test_skill_icon_markup():
     assert 'src="/static/skills/overall.png"' in str(web.skill_icon("Overall"))
 
 
-def test_day_gains_use_local_calendar_days(engine):
-    # Berlin is UTC+2 in October: local midnight on the 13th is 22:00 UTC on the 12th.
-    points = [("2026-10-11 12:00", 100), ("2026-10-11 21:00", 150), ("2026-10-12 08:00", 400),
-              ("2026-10-12 22:00", 700), ("2026-10-13 09:00", 1000)]
+def test_overview_marks_levels_gained_today(client, engine):
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     with engine.begin() as conn:
         conn.execute(text("INSERT INTO players (display_name) VALUES ('Get Grouped')"))
-        for t, xp in points:
+        for t, xp, lvl in ((now - timedelta(days=3), 1_000_000, 70), (now, 1_400_000, 72)):
             conn.execute(text("INSERT INTO xp_snapshots (player_id, skill_id, captured_at_utc, xp, level, source) "
-                              "VALUES (1, 0, :t, :xp, 1, 'hiscores')"), {"t": f"{t}+00", "xp": xp})
+                              "VALUES (1, 0, :t, :xp, :lvl, 'hiscores')"), {"t": t, "xp": xp, "lvl": lvl})
+    assert client.get("/api/levels").json()[0]["levels_today"] == 2
+    assert '<span class="level-up" title="2 levels gained">+2</span>' in client.get("/").text
+
+
+def test_day_gains_use_local_calendar_days(engine):
+    # Berlin is UTC+2 in October: local midnight on the 13th is 22:00 UTC on the 12th.
+    points = [("2026-10-11 12:00", 100, 1), ("2026-10-11 21:00", 150, 2), ("2026-10-12 08:00", 400, 4),
+              ("2026-10-12 22:00", 700, 5), ("2026-10-13 09:00", 1000, 7)]
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO players (display_name) VALUES ('Get Grouped')"))
+        for t, xp, lvl in points:
+            conn.execute(text("INSERT INTO xp_snapshots (player_id, skill_id, captured_at_utc, xp, level, source) "
+                              "VALUES (1, 0, :t, :xp, :lvl, 'hiscores')"), {"t": f"{t}+00", "xp": xp, "lvl": lvl})
     with engine.connect() as conn:
         now = datetime(2026, 10, 13, 10, tzinfo=UTC)
         # today (13th local) = 1000 - 400; yesterday (12th local, from 22:00 UTC on the 11th) = 400 - 150
-        assert q.day_gains(conn, 1, "Europe/Berlin", now) == {0: (600, 250)}
-        assert q.day_gains(conn, 1, "UTC", now) == {0: (300, 550)}
+        # levels follow the same days: Berlin 7 - 4 and 4 - 2, UTC 7 - 5 and 5 - 2
+        assert q.day_gains(conn, 1, "Europe/Berlin", now) == {0: (600, 250, 3, 2)}
+        assert q.day_gains(conn, 1, "UTC", now) == {0: (300, 550, 2, 3)}

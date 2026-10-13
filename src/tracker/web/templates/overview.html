@@ -26,8 +26,9 @@
         <td><a class="skill" href="/xp?skill={{ r.skill_id }}">{{ skill_icon(r.skill) }}{{ 'Total' if r.skill_id == -1 else r.skill }}</a></td>
         <td class="num">{{ "{:,}".format(r.level) }}{% if r.virtual_level and r.virtual_level > r.level %} <span class="muted">({{ r.virtual_level }})</span>{% endif %}</td>
         <td class="num">{{ "{:,}".format(r.xp) }}</td>
-        {% for g in (r.gained_today, r.gained_yesterday, r.gained_7d) %}
-        <td class="num">{% if g %}+{{ "{:,}".format(g) }}{% else %}<span class="muted">0</span>{% endif %}</td>
+        {% for g, lv in ((r.gained_today, r.levels_today), (r.gained_yesterday, r.levels_yesterday), (r.gained_7d, 0)) %}
+        <td class="num">{% if g %}+{{ "{:,}".format(g) }}{% else %}<span class="muted">0</span>{% endif %}
+          {%- if lv > 0 %} <span class="level-up" title="{{ lv }} level{{ 's' if lv > 1 }} gained">+{{ lv }}</span>{% endif %}</td>
         {% endfor %}
         <td>{% if r.progress_pct is not none %}<div class="bar" title="{{ r.progress_pct }}%" role="img" aria-label="{{ r.progress_pct }}% to level {{ r.next_level }}"><span style="width: {{ r.progress_pct }}%"></span></div>{% else %}<span class="muted">—</span>{% endif %}</td>
         <td class="num">{{ "{:,}".format(r.xp_to_next) if r.xp_to_next is not none else '—' }}</td>
@@ -36,7 +37,7 @@
     {% endfor %}
     </tbody>
   </table></div>
-  <p class="note">Today and Yesterday are calendar days in {{ tz }}. Levels in parentheses are virtual levels from XP. Invention uses the elite XP curve and shows no next-level progress.</p>
+  <p class="note">Today and Yesterday are calendar days in {{ tz }}; a green +N is the number of levels gained that day. Levels in parentheses are virtual levels from XP. Invention uses the elite XP curve and shows no next-level progress.</p>
 </div>
 {% endif %}
 {% endblock %}

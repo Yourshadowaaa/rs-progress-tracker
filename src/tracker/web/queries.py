@@ -113,30 +113,33 @@ def rate_per_hour(conn: Connection, pid: int, skill_id: int, window: timedelta) 
     return float(gained) / float(hours)
 
 
-def day_gains(conn: Connection, pid: int, tz: str, now: datetime | None = None) -> dict[int, tuple[int, int]]:
-    """{skill_id: (gained today, gained yesterday)} for local calendar days in `tz`. Each day's gain is the
-    XP at its last snapshot minus the XP at the last snapshot before it (or the first snapshot ever), so it
-    equals the day buckets of xp_gains()."""
+def day_gains(conn: Connection, pid: int, tz: str,
+              now: datetime | None = None) -> dict[int, tuple[int, int, int, int]]:
+    """{skill_id: (XP gained today, XP gained yesterday, levels gained today, levels gained yesterday)} for
+    local calendar days in `tz`. Each day's gain is the value at its last snapshot minus the value at the last
+    snapshot before it (or the first snapshot ever), so the XP equals the day buckets of xp_gains(). Levels
+    are the stored hiscores levels (total level for Overall)."""
     today = (now or datetime.now(UTC)).astimezone(ZoneInfo(tz)).date()
     start_of = lambda d: datetime.combine(d, time(), tzinfo=ZoneInfo(tz))  # noqa: E731
     rows = conn.execute(text("""
         WITH latest AS (
-            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            SELECT DISTINCT ON (skill_id) skill_id, xp, level FROM xp_snapshots
             WHERE player_id = :p ORDER BY skill_id, captured_at_utc DESC),
         before_today AS (
-            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            SELECT DISTINCT ON (skill_id) skill_id, xp, level FROM xp_snapshots
             WHERE player_id = :p AND captured_at_utc < :today ORDER BY skill_id, captured_at_utc DESC),
         before_yesterday AS (
-            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            SELECT DISTINCT ON (skill_id) skill_id, xp, level FROM xp_snapshots
             WHERE player_id = :p AND captured_at_utc < :yesterday ORDER BY skill_id, captured_at_utc DESC),
         first AS (
-            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            SELECT DISTINCT ON (skill_id) skill_id, xp, level FROM xp_snapshots
             WHERE player_id = :p ORDER BY skill_id, captured_at_utc ASC)
-        SELECT l.skill_id, l.xp - COALESCE(t.xp, f.xp), COALESCE(t.xp, f.xp) - COALESCE(y.xp, f.xp)
+        SELECT l.skill_id, l.xp - COALESCE(t.xp, f.xp), COALESCE(t.xp, f.xp) - COALESCE(y.xp, f.xp),
+               l.level - COALESCE(t.level, f.level), COALESCE(t.level, f.level) - COALESCE(y.level, f.level)
         FROM latest l JOIN first f USING (skill_id)
         LEFT JOIN before_today t USING (skill_id) LEFT JOIN before_yesterday y USING (skill_id)"""),
         {"p": pid, "today": start_of(today), "yesterday": start_of(today - timedelta(days=1))})
-    return {sid: (int(t), int(y)) for sid, t, y in rows}
+    return {sid: (int(t), int(y), max(int(lt), 0), max(int(ly), 0)) for sid, t, y, lt, ly in rows}
 
 
 @dataclass
@@ -153,6 +156,8 @@ class LevelRow:
     gained_today: int
     gained_yesterday: int
     gained_7d: int
+    levels_today: int
+    levels_yesterday: int
 
 
 def levels_table(conn: Connection, pid: int, tz: str) -> list[LevelRow]:
@@ -164,12 +169,13 @@ def levels_table(conn: Connection, pid: int, tz: str) -> list[LevelRow]:
     rows = []
     for sid, level, xp, rank in latest:
         prog = level_progress(sid, xp)
-        today, yesterday = days.get(sid, (0, 0))
+        today, yesterday, levels_today, levels_yesterday = days.get(sid, (0, 0, 0, 0))
         rows.append(LevelRow(
             skill_id=sid, skill=ALL_SKILLS[sid], level=level, virtual_level=prog.level if prog else None, xp=xp,
             rank=rank, next_level=prog.next_level if prog else None, xp_to_next=prog.xp_to_next if prog else None,
             progress_pct=prog.progress_pct if prog else None,
             gained_today=today, gained_yesterday=yesterday, gained_7d=gains.get(sid, 0),
+            levels_today=levels_today, levels_yesterday=levels_yesterday,
         ))
     rows.sort(key=lambda r: (r.skill_id != OVERALL_ID, r.skill_id))
     return rows

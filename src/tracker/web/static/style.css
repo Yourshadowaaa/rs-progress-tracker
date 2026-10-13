@@ -64,6 +64,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .bar { position: relative; height: 8px; min-width: 80px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .bar > span { position: absolute; inset: 0 auto 0 0; background: var(--series-1); border-radius: 4px; }
 .muted { color: var(--text-muted); }
+.level-up { color: var(--good); font-weight: 650; }
 .skill { display: inline-flex; align-items: center; gap: 6px; }
 tr.total td { font-weight: 650; border-bottom: 2px solid var(--axis); }
 .skill-icon { width: 18px; height: 18px; object-fit: contain; flex: none; }
