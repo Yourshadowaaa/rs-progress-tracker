@@ -14,19 +14,32 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import DBAPIError, OperationalError, ProgrammingError
 
 from ..config import get_settings
 from ..db import get_engine
-from ..reference import ALL_SKILLS, OVERALL_ID
+from ..reference import ALL_SKILLS, OVERALL_ID, SKILL_ICONS
 from . import queries as q
 
 HERE = Path(__file__).parent
 app = FastAPI(title="RS3 Progress Tracker", docs_url=None, redoc_url=None, openapi_url=None)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
+
+
+def skill_icon(name: str) -> Markup:
+    """<img> for a skill's wiki icon, or nothing for an unknown name. Removes itself if the image fails."""
+    url = SKILL_ICONS.get(name)
+    if not url:
+        return Markup("")
+    return Markup('<img class="skill-icon" src="{}" alt="" width="18" height="18" loading="lazy" '
+                  'referrerpolicy="no-referrer" onerror="this.remove()">').format(url)
+
+
+templates.env.globals.update(skill_icon=skill_icon, skill_icons=SKILL_ICONS)
 log = logging.getLogger("tracker.web")
 
 from . import admin  # noqa: E402  (router needs `app`, `page` defined lazily)

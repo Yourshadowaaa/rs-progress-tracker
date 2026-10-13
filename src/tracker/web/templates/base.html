@@ -9,7 +9,7 @@
 <script src="/static/app.js" defer></script>
 {% block head %}{% endblock %}
 </head>
-<body data-tz="{{ tz }}">
+<body data-tz="{{ tz }}" data-skill-icons='{{ skill_icons | tojson }}'>
 <header class="top">
   <span class="brand">{{ player }}</span>
   <nav>

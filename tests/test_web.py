@@ -157,3 +157,10 @@ def test_missing_schema_explains_itself(migrated_engine):
     finally:
         web.app.dependency_overrides.clear()
         engine.dispose()
+
+
+def test_skill_icon_markup():
+    assert web.SKILL_ICONS.keys() == set(web.ALL_SKILLS.values())
+    img = str(web.skill_icon("Runecrafting"))
+    assert 'src="https://runescape.wiki/images/Runecrafting-icon.png"' in img and 'onerror="this.remove()"' in img
+    assert str(web.skill_icon("Vorago")) == ""

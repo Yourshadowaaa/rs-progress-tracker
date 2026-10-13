@@ -7,7 +7,7 @@
   {% if overall %}
   <div class="card"><div class="label">Total XP</div><div class="value">{{ "{:,}".format(overall.xp) }}</div>
     <div class="sub">+{{ "{:,}".format(overall.gained_7d) }} last 7 days</div></div>
-  <div class="card"><div class="label">Total level</div><div class="value">{{ "{:,}".format(overall.level) }}</div>
+  <div class="card"><div class="label skill">{{ skill_icon("Overall") }}Total level</div><div class="value">{{ "{:,}".format(overall.level) }}</div>
     <div class="sub">{% if overall.rank %}Rank {{ "{:,}".format(overall.rank) }}{% else %}Unranked{% endif %}</div></div>
   {% endif %}
   <div class="card"><div class="label">Boss kills this week</div><div class="value">{{ cards.kills_this_week }}</div>
@@ -23,7 +23,7 @@
     <tbody>
     {% for r in levels if r.skill_id != -1 %}
       <tr>
-        <td><a href="/xp?skill={{ r.skill_id }}">{{ r.skill }}</a></td>
+        <td><a class="skill" href="/xp?skill={{ r.skill_id }}">{{ skill_icon(r.skill) }}{{ r.skill }}</a></td>
         <td class="num">{{ r.level }}{% if r.virtual_level and r.virtual_level > r.level %} <span class="muted">({{ r.virtual_level }})</span>{% endif %}</td>
         <td class="num">{{ "{:,}".format(r.xp) }}</td>
         <td class="num">{% if r.gained_7d %}+{{ "{:,}".format(r.gained_7d) }}{% else %}<span class="muted">0</span>{% endif %}</td>

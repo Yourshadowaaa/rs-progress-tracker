@@ -64,6 +64,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .bar { position: relative; height: 8px; min-width: 80px; background: var(--grid); border-radius: 4px; overflow: hidden; }
 .bar > span { position: absolute; inset: 0 auto 0 0; background: var(--series-1); border-radius: 4px; }
 .muted { color: var(--text-muted); }
+.skill { display: inline-flex; align-items: center; gap: 6px; }
+.skill-icon { width: 18px; height: 18px; object-fit: contain; flex: none; }
+#skill-icon:empty, #series-icon:empty, #gains-icon:empty { display: none; }
 .tag { font-size: 12px; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); color: var(--text-secondary); white-space: nowrap; }
 .empty { padding: 30px; text-align: center; color: var(--text-muted); }
 .status-ok { color: var(--good); } .status-failed { color: var(--critical); } .status-partial { color: var(--warning); }

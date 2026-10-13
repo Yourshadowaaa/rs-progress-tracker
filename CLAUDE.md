@@ -111,6 +111,9 @@ Railway project
 - Performance target: every page under 2 s with one year of hourly data. Last measured locally at
   under 0.4 s with the synthetic seed.
 - Must work at phone width (390px) without horizontal scroll.
+- Skill names are shown with their RuneScape Wiki icon (`SKILL_ICONS` in `reference.py`, hotlinked from
+  `runescape.wiki/images/<Skill>-icon.png`): `skill_icon()` in templates, `skillIcon()` in `app.js`, rich-text
+  labels in ECharts. A failed image removes itself, so the wiki being down only drops the icons.
 
 ## Working on it
 

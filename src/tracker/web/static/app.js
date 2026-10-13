@@ -65,6 +65,19 @@
 
   const shortTime = (t) => t.slice(0, 16).replace("T", " ");
 
+  // Skill name -> RuneScape Wiki icon URL, rendered by the server from reference.SKILL_ICONS.
+  let SKILL_ICONS = {};
+  try { SKILL_ICONS = JSON.parse(document.body.dataset.skillIcons || "{}"); } catch (e) { /* no icons */ }
+  function skillIcon(name) {
+    const url = SKILL_ICONS[name];
+    if (!url) return null;
+    const img = new Image(18, 18);
+    Object.assign(img, { className: "skill-icon", src: url, alt: "", loading: "lazy", referrerPolicy: "no-referrer" });
+    img.addEventListener("error", () => img.remove());
+    return img;
+  }
+  const setIcon = (id, name) => document.getElementById(id).replaceChildren(...[skillIcon(name)].filter(Boolean));
+
   // ------------------------------------------------------------------ XP page
   function xpPage() {
     const skill = document.getElementById("skill");
@@ -83,6 +96,7 @@
       document.getElementById("export").href = `/api/export/xp.csv?skill=${s}&range=${r}`;
       document.getElementById("series-title").textContent = `${name} XP`;
       document.getElementById("gains-title").textContent = `${name} XP gained per ${b}`;
+      ["skill-icon", "series-icon", "gains-icon"].forEach((id) => setIcon(id, name));
       const [series, gains, top, stats] = await Promise.all([
         getJSON(`/api/xp/series?skill=${s}&range=${r}`),
         getJSON(`/api/xp/gains?skill=${s}&range=${r}&bucket=${b}`),
@@ -117,13 +131,18 @@
       }), true);
 
       const gained = top.filter((t) => t.xp > 0).slice(0, 15).reverse();
+      // Axis labels draw the wiki icon through ECharts rich text; a failed image just leaves a gap.
+      const rich = {};
+      gained.forEach((t, i) => { if (SKILL_ICONS[t.skill]) rich[`i${i}`] = { width: 16, height: 16, backgroundColor: { image: SKILL_ICONS[t.skill] } }; });
       if (!gained.length) empty(cTop);
       else cTop.setOption(base({
         tooltip: Object.assign(base().tooltip, { axisPointer: { type: "shadow" } }),
-        grid: { left: 8, right: 56, top: 8, bottom: 8, containLabel: true },
+        // containLabel ignores rich-text images, so leave room for the 16px icon plus its gap.
+        grid: { left: 30, right: 56, top: 8, bottom: 8, containLabel: true },
         xAxis: { type: "value", splitLine: { lineStyle: { color: css("--grid") } }, axisLabel: { color: css("--text-muted"), formatter: (v) => compact.format(v) } },
         yAxis: { type: "category", data: gained.map((t) => t.skill), axisTick: { show: false },
-                 axisLine: { lineStyle: { color: css("--axis") } }, axisLabel: { color: css("--text-secondary") } },
+                 axisLine: { lineStyle: { color: css("--axis") } }, axisLabel: { color: css("--text-secondary"), rich,
+                   formatter: (v, i) => (rich[`i${i}`] ? `{i${i}|}  ${v}` : v) } },
         series: [{ name: "XP gained", type: "bar", data: gained.map((t) => t.xp), barMaxWidth: 18,
                    itemStyle: { color: SERIES[0], borderRadius: [0, 4, 4, 0] },
                    label: { show: true, position: "right", color: css("--text-secondary"), formatter: (p) => compact.format(p.value) } }],
@@ -200,6 +219,7 @@
     const els = Object.fromEntries(["type", "subject", "start", "end"].map((k) => [k, document.getElementById(k)]));
     for (const k in els) if (params.get(k)) els[k].value = params.get(k);
     const PAGE = 100;
+    const SKILL_SUBJECTS = new Set(["level_up", "xp_milestone"]);
     let offset = 0;
     async function load() {
       const p = new URLSearchParams();
@@ -218,6 +238,9 @@
         cells.forEach(([v, cls], i) => {
           const td = document.createElement("td");
           if (cls === "tag") { const s = document.createElement("span"); s.className = "tag"; s.textContent = v; td.append(s); }
+          else if (i === 2 && SKILL_SUBJECTS.has(r.event_type) && SKILL_ICONS[r.subject]) {
+            const s = document.createElement("span"); s.className = "skill"; s.append(skillIcon(r.subject), v); td.append(s);
+          }
           else { td.textContent = v; if (cls) td.className = cls; }
           if (i === 5) td.title = `raw #${r.raw_id}, first seen ${shortTime(r.first_seen)}, parser ${r.parser_version}`;
           tr.append(td);
