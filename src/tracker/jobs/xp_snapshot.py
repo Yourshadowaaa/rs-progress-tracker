@@ -26,21 +26,54 @@ def hour_floor(ts: datetime) -> datetime:
     return ts.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
 
 
-def fetch_skill_rows(client: httpx.Client, settings: Settings, result: RunResult) -> tuple[list[SkillRow], str]:
+def _on_table(client: httpx.Client, table: str, name: str) -> bool | None:
+    """Diagnostic only: is the player on `table`? None if that could not be determined."""
     try:
-        rows, _ = fetch_hiscores(client, settings.hiscore_table, settings.player_name)
+        fetch_hiscores(client, table, name)
+        return True
+    except NotFound:
+        return False
+    except UpstreamError:
+        return None
+
+
+def _runemetrics_rows(client: httpx.Client, settings: Settings, reason: Exception) -> list[SkillRow]:
+    profile = fetch_profile(client, settings.player_name)
+    if not profile.skills:
+        raise UpstreamError("RuneMetrics fallback returned no skill values") from reason
+    # RuneMetrics ranks are regular-hiscores ranks; don't mix them into an ironman rank history.
+    return [SkillRow(r.skill_id, r.level, r.xp, None) for r in profile.skills]
+
+
+def fetch_skill_rows(client: httpx.Client, settings: Settings, result: RunResult) -> tuple[list[SkillRow], str]:
+    table, name = settings.hiscore_table, settings.player_name
+    try:
+        rows, url = fetch_hiscores(client, table, name)
+        log.info("hiscores ok: %s", url)
         return rows, "hiscores"
     except NotFound as exc:
-        raise TableMismatch(
-            f"'{settings.player_name}' not found on m={settings.hiscore_table} (404). Check HISCORE_TABLE "
-            "(hiscore / hiscore_ironman / hiscore_hardcore_ironman); not falling back to another table."
-        ) from exc
+        # Never read another hiscores table in its place. Check the regular table only to explain
+        # the problem, then take XP from RuneMetrics (the account's own data) so tracking continues.
+        hint = ""
+        if table != "hiscore":
+            on_regular = _on_table(client, "hiscore", name)
+            if on_regular:
+                hint = (" The player IS on the regular hiscores (m=hiscore): the account may no longer be an "
+                        "ironman, or HISCORE_TABLE is wrong.")
+            elif on_regular is False:
+                hint = (" The player is not on the regular hiscores either: the name may be wrong or the "
+                        "account is not ranked in any skill yet.")
+        try:
+            rows = _runemetrics_rows(client, settings, exc)
+        except UpstreamError as rm_exc:
+            raise TableMismatch(f"'{name}' not found on m={table} ({exc}).{hint} RuneMetrics fallback also "
+                                f"failed: {rm_exc}") from exc
+        result.warn(f"'{name}' not found on m={table} ({exc}).{hint} XP taken from RuneMetrics instead "
+                    "(no ranks stored).")
+        return rows, "runemetrics"
     except UpstreamError as exc:
-        result.warn(f"hiscores failed ({exc}); used RuneMetrics fallback")
-        profile = fetch_profile(client, settings.player_name)
-        if not profile.skills:
-            raise UpstreamError("RuneMetrics fallback returned no skill values") from exc
-        return profile.skills, "runemetrics"
+        result.warn(f"hiscores failed ({exc}); used RuneMetrics fallback (no ranks stored)")
+        return _runemetrics_rows(client, settings, exc), "runemetrics"
 
 
 def store_snapshot(

@@ -44,10 +44,15 @@ Both services build from the same `Dockerfile`.
 
 ### Data handling decisions
 
-- **XP source.** The table set by `HISCORE_TABLE` (default `hiscore_ironman`). A **404 fails the
-  run loudly** and never silently switches tables. On other hiscores errors the job falls back to
-  RuneMetrics `skillvalues`, which report XP ×10; the job divides by 10. The snapshot time is the
-  run time truncated to the hour (UTC).
+- **XP source.** The table set by `HISCORE_TABLE` (default `hiscore_ironman`).
+  - **Name spellings.** Spaces in the name are tried as `%20`, `+`, `_` and `%A0` before treating
+    the player as not found.
+  - **Player not found (404).** The job never reads another hiscores table in its place. It checks
+    the regular table once, only to say why in the run warning, then takes XP from RuneMetrics
+    `skillvalues` (reported ×10; the job divides by 10). The run shows as `partial` on `/status`.
+  - **Other hiscores errors** use the same RuneMetrics fallback.
+  - **Ranks.** RuneMetrics-sourced snapshots store no rank, because those would be regular-table ranks.
+  - **Snapshot time.** The run time truncated to the hour (UTC).
 - **Bad data.** An all-zero payload is rejected. An XP decrease is stored with `flag='xp_decrease'`
   and a warning.
 - **Adventure log dedupe.** `entry_key = sha256(time | text | details)` plus an `occurrence` number.

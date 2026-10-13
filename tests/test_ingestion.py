@@ -44,16 +44,52 @@ def test_xp_job_idempotent_and_hour_truncated(engine, settings):
     assert times == [NOW.replace(minute=0, second=0)]
 
 
+def ironman_url(encoded: str, table: str = "hiscore_ironman") -> str:
+    return f"https://secure.runescape.com/m={table}/index_lite.ws?player={encoded}"
+
+
 @respx.mock
-def test_xp_job_404_fails_loudly_without_fallback(engine, settings):
-    respx.get(HISCORES).mock(return_value=httpx.Response(404))
-    fallback = respx.get(PROFILE).mock(return_value=httpx.Response(200, json=load_json("runemetrics_profile_synthetic.json")))
+def test_xp_job_tries_other_space_encodings(engine, settings):
+    respx.get(ironman_url("Get%20Grouped")).mock(return_value=httpx.Response(404))
+    respx.get(ironman_url("Get+Grouped")).mock(return_value=httpx.Response(404))
+    underscore = respx.get(ironman_url("Get_Grouped")).mock(
+        return_value=httpx.Response(200, text=load_fixture("hiscores_ironman_synthetic.csv")))
+    with httpx.Client() as client:
+        result = RunResult()
+        run_xp_job(engine, settings, client, result, now=NOW)
+    assert underscore.called and result.status == "ok" and result.rows_inserted == 30
+    with engine.connect() as conn:
+        assert conn.execute(select(XpSnapshot.source).distinct()).scalars().all() == ["hiscores"]
+
+
+@respx.mock
+def test_xp_404_diagnoses_and_falls_back_to_runemetrics_not_regular_table(engine, settings):
+    for enc in ("Get%20Grouped", "Get+Grouped", "Get_Grouped", "Get%A0Grouped"):
+        respx.get(ironman_url(enc)).mock(return_value=httpx.Response(404))
+    regular = respx.get(ironman_url("Get%20Grouped", "hiscore")).mock(
+        return_value=httpx.Response(200, text="\n".join(["1,99,999999999"] * 30)))
+    data = load_json("runemetrics_profile_synthetic.json")
+    respx.get(PROFILE).mock(return_value=httpx.Response(200, json=data))
     with httpx.Client() as client, tracked_run(engine, "xp") as result:
         run_xp_job(engine, settings, client, result, now=NOW)
-    assert result.status == "failed" and "not found on m=hiscore_ironman" in result.error
-    assert not fallback.called
+    assert regular.called and result.status == "partial"
+    assert "IS on the regular hiscores" in result.warnings[0] and "Get%A0Grouped" in result.warnings[0]
+    with engine.connect() as conn:
+        attack = conn.execute(select(XpSnapshot.xp, XpSnapshot.source, XpSnapshot.rank)
+                              .where(XpSnapshot.skill_id == 0)).one()
+    # XP comes from RuneMetrics, never from the regular table's numbers.
+    assert attack == (data["skillvalues"][0]["xp"] // 10, "runemetrics", None)
+
+
+@respx.mock
+def test_xp_404_and_runemetrics_private_fails_loudly(engine, settings):
+    respx.get(url__startswith="https://secure.runescape.com/").mock(return_value=httpx.Response(404))
+    respx.get(PROFILE).mock(return_value=httpx.Response(200, json={"error": "PROFILE_PRIVATE"}))
+    with httpx.Client() as client, tracked_run(engine, "xp") as result:
+        run_xp_job(engine, settings, client, result, now=NOW)
+    assert result.status == "failed" and "TableMismatch" in result.error
+    assert "not on the regular hiscores either" in result.error and "PROFILE_PRIVATE" in result.error
     assert count(engine, XpSnapshot) == 0
-    assert count(engine, IngestionRun, IngestionRun.status == "failed") == 1
 
 
 @respx.mock

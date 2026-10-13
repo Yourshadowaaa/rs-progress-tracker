@@ -11,9 +11,9 @@ responses into tests/fixtures/.
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import quote, quote_plus
+from urllib.parse import quote
 
-from ..clients.hiscores import parse_lite
+from ..clients.hiscores import name_variants, parse_lite
 from ..clients.http import make_client
 from ..clients.runemetrics import MONTHLY_URL, parse_profile, profile_url
 from ..config import get_settings
@@ -27,11 +27,12 @@ def run_probe(out_dir: str = "probe_output") -> None:
     report: list[str] = [f"probe at {datetime.now(UTC).isoformat()} for {s.player_name!r}"]
     with make_client() as client:
         for table in ("hiscore_ironman", "hiscore_hardcore_ironman", "hiscore"):
-            for label, encoded in (("%20", quote(s.player_name)), ("+", quote_plus(s.player_name))):
+            for encoded in name_variants(s.player_name):
+                label = encoded
                 url = f"https://secure.runescape.com/m={table}/index_lite.ws?player={encoded}"
                 try:
                     resp = client.get(url)
-                    line = f"hiscores {table:26} enc={label:3} -> HTTP {resp.status_code}"
+                    line = f"hiscores {table:26} player={label:18} -> HTTP {resp.status_code}"
                     if resp.status_code == 200:
                         lines = resp.text.strip().splitlines()
                         rows = parse_lite(resp.text)

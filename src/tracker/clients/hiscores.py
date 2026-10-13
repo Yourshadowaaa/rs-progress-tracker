@@ -1,12 +1,12 @@
 """RS3 hiscores 'index_lite' client (CSV: one `rank,level,xp` line per skill, Overall first)."""
 
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote, quote_plus
 
 import httpx
 
 from ..reference import ALL_SKILLS, OVERALL_ID
-from .http import UpstreamError, get_with_retry
+from .http import NotFound, UpstreamError, get_with_retry
 
 BASE = "https://secure.runescape.com/m={table}/index_lite.ws?player={name}"
 SKILL_LINES = len(ALL_SKILLS)  # Overall + 29 skills
@@ -22,6 +22,15 @@ class SkillRow:
 
 def hiscores_url(table: str, name: str) -> str:
     return BASE.format(table=table, name=quote(name))
+
+
+def name_variants(name: str) -> list[str]:
+    """Spellings of a display name that Jagex endpoints accept, most common first.
+    Spaces in RS names can be sent as %20, +, _ or a non-breaking space (%A0)."""
+    variants = [quote(name)]
+    if " " in name:
+        variants += [quote_plus(name), quote(name.replace(" ", "_")), quote(name).replace("%20", "%A0")]
+    return list(dict.fromkeys(variants))
 
 
 def parse_lite(body: str) -> list[SkillRow]:
@@ -43,5 +52,16 @@ def parse_lite(body: str) -> list[SkillRow]:
 
 
 def fetch_hiscores(client: httpx.Client, table: str, name: str) -> tuple[list[SkillRow], str]:
-    resp = get_with_retry(client, hiscores_url(table, name))
-    return parse_lite(resp.text), resp.text
+    """Fetch the lite CSV. A 404 means "player not on this table" but can also come from how the
+    space in the name was encoded, so every spelling is tried before raising NotFound.
+    Returns (rows, the URL that worked)."""
+    tried = []
+    for encoded in name_variants(name):
+        url = BASE.format(table=table, name=encoded)
+        try:
+            resp = get_with_retry(client, url)
+        except NotFound:
+            tried.append(encoded)
+            continue
+        return parse_lite(resp.text), url
+    raise NotFound(f"404 from m={table} for every name spelling tried: {', '.join(tried)}")
