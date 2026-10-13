@@ -16,9 +16,9 @@ Record the results here:
 
 | # | Check | How | Result |
 |---|---|---|---|
-| 1 | Ironman hiscores return data for `Get Grouped` | report: `hiscore_ironman enc=%20 -> HTTP 200` | ☐ |
+| 1 | Regular hiscores return data for `Get Grouped` (GIM accounts are not on the ironman tables) | report: `hiscore player=Get%20Grouped -> HTTP 200` | ✅ confirmed by user (regular table only) |
 | 2 | Name encoding: `%20` and `+` both work? | report lines for each encoding | ☐ |
-| 3 | Not on hardcore table / regular table behaviour (404 vs 200) | report | ☐ |
+| 3 | Ironman tables return 404 for this group ironman | report | ✅ confirmed by user |
 | 4 | Lite CSV has ≥ 30 `rank,level,xp` lines, Necromancy is line 30 | report line count; compare levels in-game | ☐ |
 | 5 | RuneMetrics profile is public (no `PROFILE_PRIVATE`) | report | ☐ |
 | 6 | `skillvalues` XP is ×10 | compare `runemetrics_profile.json` with hiscores CSV | ☐ |
@@ -28,7 +28,7 @@ Record the results here:
 
 After the probe:
 
-1. Copy `probe_output/hiscores_hiscore_ironman.csv` to `tests/fixtures/hiscores_ironman_live.csv` and
+1. Copy `probe_output/hiscores_hiscore.csv` to `tests/fixtures/hiscores_regular_live.csv` and
    `runemetrics_profile.json` to `tests/fixtures/runemetrics_profile_live.json`, then add tests that
    use them.
 2. Append real entries (`python -m tracker.jobs export-corpus`) to `tests/fixtures/log_corpus.jsonl`
