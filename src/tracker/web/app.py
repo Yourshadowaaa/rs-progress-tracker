@@ -161,7 +161,7 @@ def health(conn: Connection = Depends(get_conn)) -> JSONResponse:
 
 @app.get("/api/levels")
 def api_levels(conn: Connection = Depends(get_conn)):
-    return [r.__dict__ for r in q.levels_table(conn, require_pid(conn))]
+    return [r.__dict__ for r in q.levels_table(conn, require_pid(conn), ctx()[1])]
 
 
 @app.get("/api/xp/series")
@@ -260,7 +260,7 @@ def export_events(type: str | None = None, conn: Connection = Depends(get_conn))
 @app.get("/", response_class=HTMLResponse)
 def overview(request: Request, conn: Connection = Depends(get_conn)):
     pid = pid_or_none(conn)
-    levels = q.levels_table(conn, pid) if pid else []
+    levels = q.levels_table(conn, pid, ctx()[1]) if pid else []
     cards = q.summary_cards(conn, pid, ctx()[1]) if pid else None
     return page(request, "overview.html", conn, levels=levels, cards=cards, active="overview")
 

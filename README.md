@@ -7,7 +7,7 @@ A personal tracker for the RuneScape 3 group ironman **Get Grouped**. Every hour
 2. **The adventure log** from RuneMetrics. Raw entries are stored forever and parsed into structured
    events: boss kills with counts, level-ups, XP milestones, quests, drops, pets, clues and so on.
 
-A public, read-only dashboard charts XP over time, gains, projections and boss kills.
+A public, read-only dashboard charts XP over time, gains and boss kills.
 
 ## Architecture
 

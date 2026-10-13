@@ -153,6 +153,6 @@ CI (`.github/workflows/ci.yml`) runs the full suite against a Postgres 16 servic
   - real adventure log wording; replace synthetic corpus lines with real ones (`export-corpus`)
   - Railway config-as-code field names
   - backup upload to S3 or a Railway bucket
-- Invention uses the elite XP curve, which isn't tabulated, so it shows no next-level or ETA values.
+- Invention uses the elite XP curve, which isn't tabulated, so it shows no next-level progress.
 - Optional, not built: backfill from the RuneMetrics `xp-monthly` endpoint. The URL is already in
   `clients/runemetrics.py` as `MONTHLY_URL`.

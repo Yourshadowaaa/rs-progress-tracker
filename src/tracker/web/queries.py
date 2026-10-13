@@ -1,13 +1,13 @@
 """Read-only analytics queries for the dashboard. All bucketing happens in the display timezone."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
-from ..reference import ALL_SKILLS, MAX_VIRTUAL_LEVEL, OVERALL_ID, XP_TABLE, level_progress
+from ..reference import ALL_SKILLS, OVERALL_ID, level_progress
 
 RANGES = {"24h": timedelta(hours=24), "7d": timedelta(days=7), "30d": timedelta(days=30),
           "90d": timedelta(days=90), "1y": timedelta(days=365), "all": None}
@@ -113,22 +113,30 @@ def rate_per_hour(conn: Connection, pid: int, skill_id: int, window: timedelta) 
     return float(gained) / float(hours)
 
 
-def projection_rates(conn: Connection, pid: int) -> dict[int, float]:
-    """XP/hour per skill over the trailing 7 days, falling back to 30 days when 7 days is flat."""
+def day_gains(conn: Connection, pid: int, tz: str, now: datetime | None = None) -> dict[int, tuple[int, int]]:
+    """{skill_id: (gained today, gained yesterday)} for local calendar days in `tz`. Each day's gain is the
+    XP at its last snapshot minus the XP at the last snapshot before it (or the first snapshot ever), so it
+    equals the day buckets of xp_gains()."""
+    today = (now or datetime.now(UTC)).astimezone(ZoneInfo(tz)).date()
+    start_of = lambda d: datetime.combine(d, time(), tzinfo=ZoneInfo(tz))  # noqa: E731
     rows = conn.execute(text("""
-        WITH w AS (SELECT skill_id, xp, captured_at_utc t, captured_at_utc >= now() - interval '7 days' AS recent
-                   FROM xp_snapshots WHERE player_id = :p AND captured_at_utc >= now() - interval '30 days')
-        SELECT skill_id,
-               (max(xp) FILTER (WHERE recent) - min(xp) FILTER (WHERE recent))
-                 / NULLIF(EXTRACT(EPOCH FROM max(t) FILTER (WHERE recent) - min(t) FILTER (WHERE recent)) / 3600, 0),
-               (max(xp) - min(xp)) / NULLIF(EXTRACT(EPOCH FROM max(t) - min(t)) / 3600, 0)
-        FROM w GROUP BY skill_id"""), {"p": pid})
-    rates = {}
-    for sid, r7, r30 in rows:
-        rate = float(r7) if r7 else (float(r30) if r30 else None)
-        if rate:
-            rates[sid] = rate
-    return rates
+        WITH latest AS (
+            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            WHERE player_id = :p ORDER BY skill_id, captured_at_utc DESC),
+        before_today AS (
+            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            WHERE player_id = :p AND captured_at_utc < :today ORDER BY skill_id, captured_at_utc DESC),
+        before_yesterday AS (
+            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            WHERE player_id = :p AND captured_at_utc < :yesterday ORDER BY skill_id, captured_at_utc DESC),
+        first AS (
+            SELECT DISTINCT ON (skill_id) skill_id, xp FROM xp_snapshots
+            WHERE player_id = :p ORDER BY skill_id, captured_at_utc ASC)
+        SELECT l.skill_id, l.xp - COALESCE(t.xp, f.xp), COALESCE(t.xp, f.xp) - COALESCE(y.xp, f.xp)
+        FROM latest l JOIN first f USING (skill_id)
+        LEFT JOIN before_today t USING (skill_id) LEFT JOIN before_yesterday y USING (skill_id)"""),
+        {"p": pid, "today": start_of(today), "yesterday": start_of(today - timedelta(days=1))})
+    return {sid: (int(t), int(y)) for sid, t, y in rows}
 
 
 @dataclass
@@ -142,35 +150,26 @@ class LevelRow:
     next_level: int | None
     xp_to_next: int | None
     progress_pct: float | None
+    gained_today: int
+    gained_yesterday: int
     gained_7d: int
-    eta_next: str | None
-    eta_99: str | None
-    eta_120: str | None
 
 
-def _eta(xp_needed: int | None, per_hour: float | None) -> str | None:
-    if xp_needed is None or xp_needed <= 0 or not per_hour or per_hour <= 0:
-        return None
-    return (datetime.now(UTC) + timedelta(hours=xp_needed / per_hour)).date().isoformat()
-
-
-def levels_table(conn: Connection, pid: int) -> list[LevelRow]:
+def levels_table(conn: Connection, pid: int, tz: str) -> list[LevelRow]:
     latest = conn.execute(text("""
         SELECT DISTINCT ON (skill_id) skill_id, level, xp, rank FROM xp_snapshots
         WHERE player_id = :p ORDER BY skill_id, captured_at_utc DESC"""), {"p": pid}).all()
     gains = {g["skill_id"]: g["xp"] for g in gains_by_skill(conn, pid, "7d")}
-    rates = projection_rates(conn, pid)
+    days = day_gains(conn, pid, tz)
     rows = []
     for sid, level, xp, rank in latest:
         prog = level_progress(sid, xp)
-        rate = rates.get(sid)
+        today, yesterday = days.get(sid, (0, 0))
         rows.append(LevelRow(
             skill_id=sid, skill=ALL_SKILLS[sid], level=level, virtual_level=prog.level if prog else None, xp=xp,
             rank=rank, next_level=prog.next_level if prog else None, xp_to_next=prog.xp_to_next if prog else None,
-            progress_pct=prog.progress_pct if prog else None, gained_7d=gains.get(sid, 0),
-            eta_next=_eta(prog.xp_to_next, rate) if prog else None,
-            eta_99=_eta(XP_TABLE[99] - xp, rate) if prog else None,
-            eta_120=_eta(XP_TABLE[MAX_VIRTUAL_LEVEL] - xp, rate) if prog else None,
+            progress_pct=prog.progress_pct if prog else None,
+            gained_today=today, gained_yesterday=yesterday, gained_7d=gains.get(sid, 0),
         ))
     rows.sort(key=lambda r: (r.skill_id != OVERALL_ID, r.skill_id))
     return rows

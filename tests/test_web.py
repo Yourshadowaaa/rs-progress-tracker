@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,7 @@ from tracker.clients.runemetrics import parse_profile
 from tracker.jobs.adventure_log import store_activities
 from tracker.jobs.runs import RunResult
 from tracker.web import app as web
+from tracker.web import queries as q
 
 
 @pytest.fixture
@@ -68,7 +70,11 @@ def test_xp_endpoints(client, engine):
     seed_xp(engine)
     levels = {r["skill"]: r for r in client.get("/api/levels").json()}
     assert levels["Attack"]["xp"] == 1_047_000 and levels["Attack"]["gained_7d"] == 47_000
-    assert levels["Attack"]["eta_next"] is not None
+    day_buckets = {g["bucket"]: g["xp"] for g in client.get(
+        "/api/xp/gains", params={"skill": 0, "range": "all", "bucket": "day"}).json()}
+    today = datetime.now(ZoneInfo(web.ctx()[1])).date()
+    assert levels["Attack"]["gained_today"] == day_buckets.get(today.isoformat(), 0)
+    assert levels["Attack"]["gained_yesterday"] == day_buckets.get((today - timedelta(days=1)).isoformat(), 0)
     series = client.get("/api/xp/series", params={"skill": 0, "range": "7d"}).json()
     assert len(series) == 48 and series[-1]["xp"] == 1_047_000
     by_skill = client.get("/api/xp/by-skill", params={"range": "24h"}).json()
@@ -164,3 +170,19 @@ def test_skill_icon_markup():
     img = str(web.skill_icon("Runecrafting"))
     assert 'src="https://runescape.wiki/images/Runecrafting-icon.png"' in img and 'onerror="this.remove()"' in img
     assert str(web.skill_icon("Vorago")) == ""
+
+
+def test_day_gains_use_local_calendar_days(engine):
+    # Berlin is UTC+2 in October: local midnight on the 13th is 22:00 UTC on the 12th.
+    points = [("2026-10-11 12:00", 100), ("2026-10-11 21:00", 150), ("2026-10-12 08:00", 400),
+              ("2026-10-12 22:00", 700), ("2026-10-13 09:00", 1000)]
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO players (display_name) VALUES ('Get Grouped')"))
+        for t, xp in points:
+            conn.execute(text("INSERT INTO xp_snapshots (player_id, skill_id, captured_at_utc, xp, level, source) "
+                              "VALUES (1, 0, :t, :xp, 1, 'hiscores')"), {"t": f"{t}+00", "xp": xp})
+    with engine.connect() as conn:
+        now = datetime(2026, 10, 13, 10, tzinfo=UTC)
+        # today (13th local) = 1000 - 400; yesterday (12th local, from 22:00 UTC on the 11th) = 400 - 150
+        assert q.day_gains(conn, 1, "Europe/Berlin", now) == {0: (600, 250)}
+        assert q.day_gains(conn, 1, "UTC", now) == {0: (300, 550)}
