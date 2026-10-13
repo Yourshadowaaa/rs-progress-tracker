@@ -1,0 +1,232 @@
+{
+ "magic": 0,
+ "questsstarted": 3,
+ "totalskill": 2826,
+ "questscomplete": 250,
+ "questsnotstarted": 40,
+ "totalxp": 551348334,
+ "ranged": 0,
+ "activities": [
+  {
+   "date": "13-Oct-2026 09:58",
+   "text": "I killed 11 Raksha, the Shadow Colossus.",
+   "details": "I killed 11 Raksha, the Shadow Colossus."
+  },
+  {
+   "date": "13-Oct-2026 09:41",
+   "text": "Levelled up Necromancy.",
+   "details": "I levelled my Necromancy skill, I am now level 103."
+  },
+  {
+   "date": "13-Oct-2026 09:12",
+   "text": "I found a Shadow spike",
+   "details": "I found a Shadow spike. It dropped from Raksha, the Shadow Colossus."
+  },
+  {
+   "date": "13-Oct-2026 08:50",
+   "text": "I killed  4 Kalphite Kings.",
+   "details": "I killed  4 Kalphite Kings."
+  },
+  {
+   "date": "13-Oct-2026 08:50",
+   "text": "I killed  4 Kalphite Kings.",
+   "details": "I killed  4 Kalphite Kings."
+  },
+  {
+   "date": "13-Oct-2026 08:12",
+   "text": "40000000XP in Slayer",
+   "details": "I now have at least 40000000 experience points in the Slayer skill."
+  },
+  {
+   "date": "12-Oct-2026 22:03",
+   "text": "Quest complete: Ode of the Devourer",
+   "details": "I have completed the quest Ode of the Devourer."
+  },
+  {
+   "date": "12-Oct-2026 21:40",
+   "text": "Completed a hard Treasure Trail.",
+   "details": "I have completed a hard treasure trail."
+  }
+ ],
+ "skillvalues": [
+  {
+   "level": 99,
+   "xp": 267320483,
+   "rank": 10000,
+   "id": 0
+  },
+  {
+   "level": 99,
+   "xp": 151233163,
+   "rank": 10001,
+   "id": 1
+  },
+  {
+   "level": 99,
+   "xp": 314961563,
+   "rank": 10002,
+   "id": 2
+  },
+  {
+   "level": 94,
+   "xp": 82404473,
+   "rank": 10003,
+   "id": 3
+  },
+  {
+   "level": 96,
+   "xp": 98611163,
+   "rank": 10004,
+   "id": 4
+  },
+  {
+   "level": 97,
+   "xp": 113169603,
+   "rank": 10005,
+   "id": 5
+  },
+  {
+   "level": 99,
+   "xp": 295409673,
+   "rank": 10006,
+   "id": 6
+  },
+  {
+   "level": 95,
+   "xp": 88922413,
+   "rank": 10007,
+   "id": 7
+  },
+  {
+   "level": 99,
+   "xp": 390534353,
+   "rank": 10008,
+   "id": 8
+  },
+  {
+   "level": 99,
+   "xp": 194081513,
+   "rank": 10009,
+   "id": 9
+  },
+  {
+   "level": 93,
+   "xp": 75162913,
+   "rank": 10010,
+   "id": 10
+  },
+  {
+   "level": 97,
+   "xp": 107678213,
+   "rank": 10011,
+   "id": 11
+  },
+  {
+   "level": 99,
+   "xp": 341014693,
+   "rank": 10012,
+   "id": 12
+  },
+  {
+   "level": 99,
+   "xp": 330630583,
+   "rank": 10013,
+   "id": 13
+  },
+  {
+   "level": 96,
+   "xp": 96879183,
+   "rank": 10014,
+   "id": 14
+  },
+  {
+   "level": 99,
+   "xp": 211506203,
+   "rank": 10015,
+   "id": 15
+  },
+  {
+   "level": 97,
+   "xp": 110876473,
+   "rank": 10016,
+   "id": 16
+  },
+  {
+   "level": 99,
+   "xp": 334890003,
+   "rank": 10017,
+   "id": 17
+  },
+  {
+   "level": 95,
+   "xp": 89668383,
+   "rank": 10018,
+   "id": 18
+  },
+  {
+   "level": 99,
+   "xp": 133082083,
+   "rank": 10019,
+   "id": 19
+  },
+  {
+   "level": 99,
+   "xp": 199813133,
+   "rank": 10020,
+   "id": 20
+  },
+  {
+   "level": 95,
+   "xp": 91514913,
+   "rank": 10021,
+   "id": 21
+  },
+  {
+   "level": 99,
+   "xp": 316207763,
+   "rank": 10022,
+   "id": 22
+  },
+  {
+   "level": 94,
+   "xp": 83278823,
+   "rank": 10023,
+   "id": 23
+  },
+  {
+   "level": 99,
+   "xp": 198365503,
+   "rank": 10024,
+   "id": 24
+  },
+  {
+   "level": 94,
+   "xp": 81261103,
+   "rank": 10025,
+   "id": 25
+  },
+  {
+   "level": 99,
+   "xp": 139372103,
+   "rank": 10026,
+   "id": 26
+  },
+  {
+   "level": 99,
+   "xp": 244353503,
+   "rank": 10027,
+   "id": 27
+  },
+  {
+   "level": 99,
+   "xp": 331279453,
+   "rank": 10028,
+   "id": 28
+  }
+ ],
+ "name": "Get Grouped",
+ "rank": "45,123",
+ "melee": 0,
+ "combatlevel": 138,
+ "loggedIn": "false"
+}
