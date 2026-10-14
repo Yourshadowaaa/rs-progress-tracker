@@ -135,3 +135,37 @@ def test_admin_save_with_nothing_ticked_clears_ticks(admin_client, engine):  # n
     assert r.status_code == 303
     with engine.connect() as conn:
         assert q.comp_progress(conn, "UTC")["done"] == 0
+
+
+def test_category_column_groups_rows():
+    html = """<h2>Achievements</h2><table class="wikitable sortable">
+    <tr><th>Name</th><th>Members</th><th>Description</th><th>Category</th><th>Subcategory</th><th>Score</th></tr>
+    <tr><td>Dragon Slayer</td><td>Yes</td><td>Slay a dragon.</td><td>Combat</td><td>Bosses</td><td>10</td></tr>
+    <tr><td>Lore Hunter</td><td>Yes</td><td>Read the books.</td><td>Lore</td><td>Books</td><td>5</td></tr>
+    <tr><td>Big Sword</td><td>Yes</td><td>Hit hard.</td><td>Combat</td><td>Melee</td><td>5</td></tr>
+    </table>"""
+    reqs = parse_requirements(html)
+    assert [(r.category, r.name, r.description) for r in reqs] == [
+        ("Combat", "Dragon Slayer", "Slay a dragon."), ("Lore", "Lore Hunter", "Read the books."),
+        ("Combat", "Big Sword", "Hit hard."),
+    ]
+
+
+def test_tabber_panels_name_the_category():
+    html = """<h2>Achievements</h2><div class="tabber">
+    <article class="tabber__panel" data-mw-tabber-title="Skills"><table class="wikitable">
+      <tr><th>Achievement</th><th>Description</th></tr><tr><td>Max</td><td>All 99s.</td></tr></table></article>
+    <div class="tabbertab" title="Exploration"><table class="wikitable">
+      <tr><th>Achievement</th><th>Description</th></tr><tr><td>Elite Achiever</td><td>Diaries.</td></tr></table></div>
+    </div><table class="wikitable"><tr><th>Achievement</th></tr><tr><td>After tabs</td></tr></table>"""
+    assert [(r.category, r.name) for r in parse_requirements(html)] == [
+        ("Skills", "Max"), ("Exploration", "Elite Achiever"), ("Achievements", "After tabs")]
+
+
+def test_overview_groups_interleaved_categories(engine):
+    html = """<table class="wikitable"><tr><th>Name</th><th>Category</th></tr>
+    <tr><td>A</td><td>Combat</td></tr><tr><td>B</td><td>Lore</td></tr><tr><td>C</td><td>Combat</td></tr></table>"""
+    comp_cape.sync_requirements(engine, synthetic_page(html))
+    with engine.connect() as conn:
+        cats = q.comp_progress(conn, "UTC")["categories"]
+    assert [(c["name"], c["total"]) for c in cats] == [("Combat", 2), ("Lore", 1)]

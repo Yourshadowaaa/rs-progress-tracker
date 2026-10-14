@@ -6,7 +6,8 @@ ever set by hand on /admin/comp and are keyed by requirement, so a resync never 
 
 Extraction is deliberately generic because the page layout was not available when this was
 written: every `wikitable` row becomes one requirement, grouped by the nearest heading above the
-table (or by a full-width row inside it). Sections such as references, trivia and update history
+table, the tab it sits in (tabber panels), or a full-width row inside it. A "Category" column, as in
+the wiki's achievement tables, takes precedence over all of these. Sections such as references, trivia and update history
 are ignored. If a page has no such tables, bullet lists under a "requirement" heading are used.
 """
 
@@ -25,6 +26,7 @@ from ..models import WikiPage as WikiPageRow
 
 SKIP_SECTIONS = ("reference", "trivia", "update history", "history", "changes", "gallery", "see also",
                  "rewards", "perks", "transcript", "external links", "navigation")
+CATEGORY_HEADERS = ("category",)  # not "subcategory": those would split the list into dozens of groups
 NAME_HEADERS = ("achievement", "requirement", "name", "task", "quest", "item", "skill", "activity", "title")
 DESC_HEADERS = ("description", "details", "notes", "requirements", "how to", "criteria")
 SKIP_CLASSES = ("navbox", "infobox", "reference", "mw-editsection", "sortkey", "noprint", "mw-references-wrap",
@@ -74,6 +76,7 @@ class _Extractor(HTMLParser):
         self.stack: list[tuple[str, bool]] = []  # (tag, starts a skipped subtree)
         self.headings: dict[int, str] = {}
         self.heading: tuple[int, list[str]] | None = None
+        self.tabs: list[tuple[int, str]] = []  # (stack depth, title) of open tabber panels
         self.table: _Table | None = None
         self.table_depth = 0  # stack depth of the tracked wikitable
         self.cell: _Cell | None = None
@@ -88,7 +91,7 @@ class _Extractor(HTMLParser):
 
     def section(self) -> tuple[str, str] | None:
         """(category, full heading path) for the current position, or None inside an ignored section."""
-        path = [self.headings[k] for k in sorted(self.headings) if self.headings[k]]
+        path = [self.headings[k] for k in sorted(self.headings) if self.headings[k]] + [t for _, t in self.tabs]
         if any(p.lower().startswith(SKIP_SECTIONS) for p in path):
             return None
         return (path[-1] if path else DEFAULT_CATEGORY), " / ".join(path)
@@ -105,6 +108,9 @@ class _Extractor(HTMLParser):
         self.stack.append((tag, skip))
         if self.skipping:
             return
+        tab_title = a.get("data-mw-tabber-title") or a.get("data-title") or a.get("title")
+        if tab_title and {"tabber__panel", "tabbertab"} & set(classes):
+            self.tabs.append((len(self.stack), clean(tab_title)))
         if re.fullmatch(r"h[2-4]", tag):
             self.heading = (int(tag[1]), [])
         elif tag == "table" and "wikitable" in classes:
@@ -132,6 +138,8 @@ class _Extractor(HTMLParser):
                 break
 
     def _close(self, tag: str) -> None:
+        while self.tabs and self.tabs[-1][0] > len(self.stack):
+            self.tabs.pop()
         if self.heading and tag == f"h{self.heading[0]}":
             level, parts = self.heading
             self.headings = {k: v for k, v in self.headings.items() if k < level}
@@ -180,7 +188,8 @@ def _table_requirements(table: _Table) -> list[Requirement]:
         if not row:
             continue
         texts = [c.text for c in row]
-        if len(row) == 1 and (row[0].colspan > 1 or row[0].header) and texts[0]:
+        first = not headers and not out and sub is None
+        if len(row) == 1 and (row[0].colspan > 1 or (row[0].header and not first)) and texts[0]:
             sub = texts[0]  # full-width row: a subgroup inside the table
             continue
         if all(c.header for c in row):
@@ -191,12 +200,15 @@ def _table_requirements(table: _Table) -> list[Requirement]:
             name_i = next((i for i, t in enumerate(texts) if t), None)
         if name_i is None:
             continue
+        cat_i = _pick(headers, CATEGORY_HEADERS, exclude=name_i) if headers else None
+        row_category = texts[cat_i] if cat_i is not None and cat_i < len(texts) and texts[cat_i] else None
         desc_i = _pick(headers, DESC_HEADERS, exclude=name_i) if headers else None
         if desc_i is not None and desc_i < len(texts):
             desc = texts[desc_i]
         else:
-            desc = " · ".join(t for i, t in enumerate(texts) if i != name_i and t)
-        out.append(Requirement(f"{category} › {sub}" if sub else category, texts[name_i], desc[:500]))
+            desc = " · ".join(t for i, t in enumerate(texts) if i not in (name_i, cat_i) and t)
+        group = row_category or (f"{category} › {sub}" if sub else category)
+        out.append(Requirement(group, texts[name_i], desc[:500]))
     return out
 
 
