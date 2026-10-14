@@ -25,6 +25,10 @@ Production runs on Railway: https://rs-progress-tracker-production.up.railway.ap
 - **Unverified hypotheses.** Log timestamps (`13-Oct-2026 10:01`) are assumed to be UTC. Parser
   wording comes from synthetic samples. Both still need confirming against live data; see
   `docs/verification.md`.
+- **The completionist cape page is one "Achievements list" table** (Name, Description, Members,
+  Category, Subcategory, Subsubcategory, RuneScore; 102 rows in Oct 2026). Groups come from the
+  Category column. Real capture: `tests/fixtures/comp_cape_page.html`. The wiki is blocked from the
+  sandbox too.
 - **Jagex and railway.app are blocked from Claude's cloud sandbox** (proxy 403). Live checks have to
   happen on Railway: run `python -m tracker.jobs probe` in the web service shell. The user can also
   paste output.
@@ -158,8 +162,5 @@ CI (`.github/workflows/ci.yml`) runs the full suite against a Postgres 16 servic
   - Railway config-as-code field names
   - backup upload to S3 or a Railway bucket
 - Invention uses the elite XP curve, which isn't tabulated, so it shows no next-level progress.
-- Completionist cape extractor (`jobs/comp_cape.py`) was written against a synthetic page
-  (`tests/fixtures/comp_cape_synthetic.html`) because the wiki is blocked from the sandbox. Check the
-  first real sync, and replace the fixture with the real HTML (download it from `/admin/comp`).
 - Optional, not built: backfill from the RuneMetrics `xp-monthly` endpoint. The URL is already in
   `clients/runemetrics.py` as `MONTHLY_URL`.

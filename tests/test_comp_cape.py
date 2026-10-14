@@ -169,3 +169,16 @@ def test_overview_groups_interleaved_categories(engine):
     with engine.connect() as conn:
         cats = q.comp_progress(conn, "UTC")["categories"]
     assert [(c["name"], c["total"]) for c in cats] == [("Combat", 2), ("Lore", 1)]
+
+
+def test_real_page_groups_into_the_seven_achievement_categories():
+    """Captured page: one "Achievements list" table with a Category column. The page says it lists 102."""
+    reqs = parse_requirements(load_fixture("comp_cape_page.html"))
+    counts = {}
+    for r in reqs:
+        counts[r.category] = counts.get(r.category, 0) + 1
+    assert counts == {"Activities": 16, "Area Tasks": 2, "Combat": 1, "Completionist": 1, "Exploration": 24,
+                      "Lore": 14, "Skills": 44}
+    first = reqs[0]
+    assert (first.name, first.description) == ("Balanced Combat Triangle", "Solve a lockbox puzzle.")
+    assert len({k for k, _ in assign_keys(reqs)}) == 102
