@@ -29,6 +29,9 @@ log = logging.getLogger("tracker.admin")
 router = APIRouter()
 basic = HTTPBasic(auto_error=False, realm="RS3 Tracker admin")
 _manual_run = threading.Lock()  # one force update at a time within this process
+# The wiki is only fetched when the admin presses "Fetch new requirements"; this stops double clicks
+# and repeated presses from sending it more than one request per window.
+WIKI_FETCH_COOLDOWN = timedelta(minutes=10)
 
 
 def admin_enabled() -> bool:
@@ -114,12 +117,22 @@ def force_update(csrf: str = Form(""), user: str = Depends(require_admin)):
 # ---------------------------------------------------------------- completionist cape checklist
 
 
+def wiki_fetch_cooldown_remaining() -> timedelta | None:
+    last = comp_cape.last_fetched(get_engine(), get_settings().comp_cape_page)
+    if last is None:
+        return None
+    remaining = last + WIKI_FETCH_COOLDOWN - datetime.now(UTC)
+    return remaining if remaining.total_seconds() > 0 else None
+
+
 @router.get("/admin/comp", response_class=HTMLResponse)
 def comp_page(request: Request, user: str = Depends(require_admin)):
     from .app import page, q
 
+    remaining = wiki_fetch_cooldown_remaining()
     with get_engine().connect() as conn:
         return page(request, "comp_admin.html", conn, active="admin", user=user, csrf=csrf_token(),
+                    fetch_cooldown_s=int(remaining.total_seconds()) if remaining else 0,
                     comp=q.comp_progress(conn, get_settings().display_tz),
                     message=request.query_params.get("result"), detail=request.query_params.get("detail"),
                     wiki_page=get_settings().comp_cape_page)
@@ -136,16 +149,18 @@ def comp_save(csrf: str = Form(""), done: list[str] = Form([]), user: str = Depe
 @router.post("/admin/comp/sync")
 def comp_sync(csrf: str = Form(""), user: str = Depends(require_admin)):
     check_csrf(csrf)
+    if wiki_fetch_cooldown_remaining() is not None:
+        return RedirectResponse("/admin/comp?result=fetch_cooldown", status_code=303)
     try:
         with make_client() as client:
             page = fetch_page(client, get_settings().comp_cape_page)
         result = comp_cape.sync_requirements(get_engine(), page)
     except (UpstreamError, comp_cape.NoRequirementsFound) as exc:
-        log.warning("completionist requirement sync failed: %s", exc)
-        return RedirectResponse("/admin/comp?" + urlencode({"result": "sync_failed", "detail": str(exc)[:300]}),
+        log.warning("completionist requirement fetch failed: %s", exc)
+        return RedirectResponse("/admin/comp?" + urlencode({"result": "fetch_failed", "detail": str(exc)[:300]}),
                                 status_code=303)
-    log.info("completionist requirements synced: %s", result.summary())
-    return RedirectResponse("/admin/comp?" + urlencode({"result": "synced", "detail": result.summary()}),
+    log.info("completionist requirements fetched: %s", result.summary())
+    return RedirectResponse("/admin/comp?" + urlencode({"result": "fetched", "detail": result.summary()}),
                             status_code=303)
 
 

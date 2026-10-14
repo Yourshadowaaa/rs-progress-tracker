@@ -262,6 +262,11 @@ def stored_page(engine: Engine, title: str) -> WikiPage | None:
     return WikiPage(*row) if row else None
 
 
+def last_fetched(engine: Engine, title: str) -> datetime | None:
+    with engine.connect() as conn:
+        return conn.execute(text("SELECT fetched_at FROM wiki_pages WHERE title = :t"), {"t": title}).scalar()
+
+
 def sync_requirements(engine: Engine, page: WikiPage) -> SyncResult:
     """Store the page, then upsert its requirements. Ones no longer listed are deactivated, not deleted."""
     store_page(engine, page)

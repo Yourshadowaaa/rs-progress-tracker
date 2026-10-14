@@ -61,7 +61,7 @@ Railway project
 | `src/tracker/parser/rules.py` | Ordered regex `RULES` list (first match wins), `PARSER_VERSION` |
 | `src/tracker/web/app.py` | Pages, `/api/*` JSON, CSV exports, `/health`, `/livez`, DB-error handler (503 page that names the fix) |
 | `src/tracker/web/queries.py` | All dashboard SQL. Buckets are computed in `DISPLAY_TZ` (Europe/Berlin) |
-| `src/tracker/web/admin.py` | `/admin` + `POST /admin/refresh`: HTTP Basic auth (`ADMIN_PASSWORD`), CSRF token, cooldown, background thread. `/admin/comp` checklist: `POST /admin/comp` (save ticks), `POST /admin/comp/sync` (fetch the wiki page) |
+| `src/tracker/web/admin.py` | `/admin` + `POST /admin/refresh`: HTTP Basic auth (`ADMIN_PASSWORD`), CSRF token, cooldown, background thread. `/admin/comp` checklist: `POST /admin/comp` (save ticks), `POST /admin/comp/sync` ("Fetch new requirements": the only way the web app contacts the wiki, 10-minute cooldown) |
 | `src/tracker/clients/wiki.py` / `jobs/comp_cape.py` | Completionist cape: MediaWiki `action=parse` fetch, generic `wikitable` extractor, requirement sync (deactivate, never delete), tick saving |
 | `src/tracker/web/static/app.js` | Chart rendering, one `Tracker.*Page()` per page. Colours come from CSS variables in `style.css` |
 | `alembic/versions/` | 0001 schema + view, 0002 skill seed, 0003 `ingestion_runs.trigger`, 0004 `wiki_pages` / `comp_requirements` / `comp_completions` |
@@ -94,6 +94,8 @@ Railway project
    - Identifiable User-Agent, at most hourly automatic polling, retry with backoff only on 5xx and
      429 responses and network errors.
    - Force update has a cooldown (`FORCE_UPDATE_COOLDOWN_MIN`).
+   - The same goes for the RuneScape Wiki: it is fetched only on an explicit admin action (button or
+     `comp-sync`), never on a schedule or page view.
 9. **Schema changes go through new Alembic migrations.** Never use `create_all`. The web container
    runs `alembic upgrade head` on every start. `check_schema()` makes the cron job refuse to run on
    a schema that is behind.

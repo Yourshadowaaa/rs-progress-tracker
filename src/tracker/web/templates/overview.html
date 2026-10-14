@@ -32,9 +32,9 @@
     </details>
   {% endfor %}
   </div>
-  <p class="note">Requirements from the <a href="https://runescape.wiki/w/Completionist_Cape_(achievement)" rel="noopener" target="_blank">RuneScape Wiki</a>{% if comp.source %}, synced {{ comp.source.fetched[:10] }}{% endif %}. Components are ticked off by hand.</p>
+  <p class="note">Requirements from the <a href="https://runescape.wiki/w/Completionist_Cape_(achievement)" rel="noopener" target="_blank">RuneScape Wiki</a>{% if comp.source %}, fetched {{ comp.source.fetched[:10] }}{% endif %}. Components are ticked off by hand.</p>
   {% else %}
-  <p class="muted">No requirements loaded yet. Open <a href="/admin/comp">the checklist</a> and press “Sync from wiki”.</p>
+  <p class="muted">No requirements loaded yet. Open <a href="/admin/comp">the checklist</a> and press “Fetch new requirements”.</p>
   {% endif %}
 </div>
 {% endif %}

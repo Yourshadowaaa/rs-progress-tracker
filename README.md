@@ -94,7 +94,7 @@ Both services build from the same `Dockerfile`.
 | `ADMIN_PASSWORD` | unset | Turns on the **Force update** button at `/admin`. Unset means the feature is off (404) |
 | `ADMIN_USERNAME` | `admin` | Username for `/admin` |
 | `FORCE_UPDATE_COOLDOWN_MIN` | `5` | Minimum minutes between force updates |
-| `COMP_CAPE_PAGE` | `Completionist Cape (achievement)` | RuneScape Wiki page the completionist checklist is synced from |
+| `COMP_CAPE_PAGE` | `Completionist Cape (achievement)` | RuneScape Wiki page the completionist requirements are fetched from |
 | `WIKI_API_URL` | `https://runescape.wiki/api.php` | MediaWiki API used for that sync |
 | `BACKUP_DIR` / `BACKUP_S3_*` | unset | See Backups |
 
@@ -131,7 +131,7 @@ python -m tracker.jobs reparse [--all]  # rebuild events after parser changes (d
 python -m tracker.jobs probe            # check the endpoints and save raw responses to probe_output/
 python -m tracker.jobs export-corpus    # stored log entries as JSONL, to grow the parser test corpus
 python -m tracker.jobs backup           # run a backup now
-python -m tracker.jobs comp-sync        # sync completionist cape requirements from the wiki
+python -m tracker.jobs comp-sync        # fetch completionist cape requirements from the wiki
                                         #   --stored: re-derive from the last fetched copy; --from-file PATH
 ```
 
@@ -177,12 +177,13 @@ The Overview page shows progress towards the completionist cape: an overall bar 
 The requirement list comes from the RuneScape Wiki page set in `COMP_CAPE_PAGE`. You tick off
 components by hand on `/admin/comp`, which needs `ADMIN_PASSWORD`.
 
-- **Sync from wiki** on `/admin/comp` fetches the page's rendered HTML through the MediaWiki API
+- **Fetch new requirements** on `/admin/comp` fetches the page's rendered HTML through the MediaWiki API
   (`action=parse`) and stores it in `wiki_pages`. Each row of the page's `wikitable`s becomes one
   requirement, grouped by the heading above the table or by a full-width row inside it. Sections like
   update history, references and trivia are ignored.
-- The wiki is only contacted when you press the button or run `comp-sync`, never on a schedule.
-- Requirements the page no longer lists are hidden, not deleted, and your ticks are kept. A sync that
+- The wiki is only contacted when you press the button or run `comp-sync`, never on a schedule or
+  page view. The button allows one fetch per 10 minutes, so double clicks don't repeat the request.
+- Requirements the page no longer lists are hidden, not deleted, and your ticks are kept. A fetch that
   finds nothing changes nothing.
 - If the requirements look wrong, download the stored HTML from `/admin/comp`, adjust
   `src/tracker/jobs/comp_cape.py`, and run `comp-sync --stored`.

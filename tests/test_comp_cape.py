@@ -100,7 +100,12 @@ def test_admin_sync_and_save_then_overview_shows_progress(admin_client, engine):
     assert admin_client.post("/admin/comp/sync", data={"csrf": csrf}).status_code == 401
     assert admin_client.post("/admin/comp/sync", auth=AUTH, data={"csrf": "forged"}).status_code == 403
     r = admin_client.post("/admin/comp/sync", auth=AUTH, data={"csrf": csrf}, follow_redirects=False)
-    assert r.status_code == 303 and "result=synced" in r.headers["location"]
+    assert r.status_code == 303 and "result=fetched" in r.headers["location"]
+    # a second press within the cooldown does not contact the wiki again
+    again = admin_client.post("/admin/comp/sync", auth=AUTH, data={"csrf": csrf}, follow_redirects=False)
+    assert again.headers["location"] == "/admin/comp?result=fetch_cooldown"
+    assert respx.calls.call_count == 1
+    assert "available again in" in admin_client.get("/admin/comp", auth=AUTH).text
 
     page = admin_client.get("/admin/comp", auth=AUTH).text
     assert 'value="quest-cape"' in page and "Lore Collector" in page and AUTH[1] not in page
@@ -119,8 +124,8 @@ def test_admin_sync_and_save_then_overview_shows_progress(admin_client, engine):
 def test_admin_sync_failure_is_reported(admin_client, engine):  # noqa: F811
     respx.get(parse_url(PAGE)).mock(return_value=httpx.Response(403, text="blocked"))
     r = admin_client.post("/admin/comp/sync", auth=AUTH, data={"csrf": admin.csrf_token()}, follow_redirects=False)
-    assert "result=sync_failed" in r.headers["location"]
-    assert "Sync failed" in admin_client.get(r.headers["location"], auth=AUTH).text
+    assert "result=fetch_failed" in r.headers["location"]
+    assert "Fetch failed" in admin_client.get(r.headers["location"], auth=AUTH).text
 
 
 def test_admin_save_with_nothing_ticked_clears_ticks(admin_client, engine):  # noqa: F811
