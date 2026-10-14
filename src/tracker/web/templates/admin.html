@@ -23,6 +23,11 @@
   </form>
   <p class="note">Signed in as {{ user }}. Limited to one force update every {{ cooldown_min }} minutes to stay polite to Jagex's servers.</p>
 </div>
+<div class="panel">
+  <h2>Completionist cape</h2>
+  <p>Sync the requirement list from the RuneScape Wiki and tick off the components you have done.</p>
+  <a class="button primary" href="/admin/comp">Open checklist</a>
+</div>
 <div class="panel table-wrap"><h2>Latest runs</h2>
 <table><thead><tr><th>Job</th><th>Trigger</th><th>Started</th><th>Status</th><th class="num">Rows</th><th>Warning / error</th></tr></thead><tbody>
 {% for r in runs %}

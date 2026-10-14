@@ -55,12 +55,17 @@ def walk_routes(routes):
             yield from walk_routes(sub)
 
 
-def test_only_get_routes_exist_except_force_update():
+ADMIN_WRITE_ROUTES = {"/admin/refresh", "/admin/comp", "/admin/comp/sync"}  # Basic auth + CSRF
+
+
+def test_only_get_routes_exist_except_admin_writes():
     routes = list(walk_routes(web.app.routes))
-    assert any(r.path == "/admin/refresh" for r in routes)
+    assert ADMIN_WRITE_ROUTES <= {r.path for r in routes}
     for route in routes:
         methods = set(getattr(route, "methods", None) or {"GET"})
-        if route.path == "/admin/refresh":
+        if route.path == "/admin/comp" and methods <= {"GET", "HEAD"}:
+            continue  # the checklist page itself
+        if route.path in ADMIN_WRITE_ROUTES:
             assert methods == {"POST"}
         else:
             assert methods <= {"GET", "HEAD"}, route.path

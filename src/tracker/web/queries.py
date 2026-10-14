@@ -322,3 +322,26 @@ def run_history(conn: Connection, tz: str, limit: int = 100) -> list[dict]:
             for r in conn.execute(text("""
                 SELECT source, started_at, finished_at, status, rows_inserted, warning, error, trigger
                 FROM ingestion_runs ORDER BY started_at DESC, id DESC LIMIT :l"""), {"l": limit})]
+
+
+def comp_progress(conn: Connection, tz: str) -> dict:
+    """Completionist cape checklist: active requirements in page order, grouped by category."""
+    rows = conn.execute(text("""
+        SELECT r.key, r.category, r.name, r.description, c.completed_at
+        FROM comp_requirements r LEFT JOIN comp_completions c ON c.requirement_key = r.key
+        WHERE r.active ORDER BY r.sort_order""")).all()
+    source = conn.execute(text("SELECT title, revid, fetched_at FROM wiki_pages ORDER BY fetched_at DESC LIMIT 1")).first()
+    categories: dict[str, dict] = {}
+    for key, category, name, description, completed_at in rows:
+        cat = categories.setdefault(category, {"name": category, "items": [], "done": 0})
+        cat["items"].append({"key": key, "name": name, "description": description, "done": completed_at is not None,
+                             "completed_at": iso_local(completed_at, tz) if completed_at else None})
+        cat["done"] += completed_at is not None
+    for cat in categories.values():
+        cat["total"] = len(cat["items"])
+        cat["pct"] = round(100 * cat["done"] / cat["total"], 1)
+    done = sum(c["done"] for c in categories.values())
+    return {"total": len(rows), "done": done, "pct": round(100 * done / len(rows), 1) if rows else 0.0,
+            "categories": list(categories.values()),
+            "source": None if source is None else {"title": source[0], "revid": source[1],
+                                                   "fetched": iso_local(source[2], tz)}}

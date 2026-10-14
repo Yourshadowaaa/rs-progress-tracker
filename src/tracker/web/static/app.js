@@ -258,5 +258,21 @@
     load();
   }
 
-  window.Tracker = { xpPage, bossPage, eventsPage };
+  function compAdminPage() {
+    const form = document.getElementById("comp-form");
+    if (!form) return;
+    form.querySelectorAll("details.comp-cat").forEach((cat) => {
+      const all = cat.querySelector("input[data-all]");
+      const boxes = [...cat.querySelectorAll('input[name="done"]')];
+      const sync = () => { all.checked = boxes.every((b) => b.checked); };
+      all.addEventListener("change", () => boxes.forEach((b) => { b.checked = all.checked; }));
+      boxes.forEach((b) => b.addEventListener("change", sync));
+    });
+    let dirty = false;
+    form.addEventListener("change", () => { dirty = true; document.getElementById("comp-dirty").hidden = false; });
+    form.addEventListener("submit", () => { dirty = false; });
+    window.addEventListener("beforeunload", (e) => { if (dirty) e.preventDefault(); });
+  }
+
+  window.Tracker = { xpPage, bossPage, eventsPage, compAdminPage };
 })();

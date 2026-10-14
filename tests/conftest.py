@@ -41,7 +41,8 @@ def migrated_engine():
 def engine(migrated_engine):
     with migrated_engine.begin() as conn:
         conn.execute(text(
-            "TRUNCATE adventure_events, adventure_log_raw, xp_snapshots, ingestion_runs, players RESTART IDENTITY CASCADE"
+            "TRUNCATE adventure_events, adventure_log_raw, xp_snapshots, ingestion_runs, players, "
+            "comp_completions, comp_requirements, wiki_pages RESTART IDENTITY CASCADE"
         ))
     return migrated_engine
 

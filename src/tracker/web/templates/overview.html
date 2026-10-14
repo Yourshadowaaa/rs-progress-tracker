@@ -15,6 +15,29 @@
   <div class="card"><div class="label">Level-ups this month</div><div class="value">{{ cards.level_ups_this_month }}</div>
     <div class="sub"><a href="/events?type=level_up">view</a></div></div>
 </div>
+{% if comp.total or admin_enabled %}
+<div class="panel">
+  <div class="filters" style="justify-content: space-between; margin-bottom: 8px"><h2 style="margin:0">Completionist cape</h2>
+    {% if admin_enabled %}<a href="/admin/comp">Edit checklist</a>{% endif %}</div>
+  {% if comp.total %}
+  {% include "_comp_bar.html" %}
+  <div class="comp-cats">
+  {% for cat in comp.categories %}
+    <details class="comp-cat">
+      <summary><span>{{ cat.name }}</span><span class="muted num">{{ cat.done }} / {{ cat.total }}</span>
+        <span class="bar{% if cat.done == cat.total %} complete{% endif %}" role="img" aria-label="{{ cat.pct }}% of {{ cat.name }} complete"><span style="width: {{ cat.pct }}%"></span></span></summary>
+      <ul class="comp-list">
+      {% for it in cat['items'] %}<li class="{{ 'done' if it.done }}">{{ '✓' if it.done else '○' }} {{ it.name }}</li>{% endfor %}
+      </ul>
+    </details>
+  {% endfor %}
+  </div>
+  <p class="note">Requirements from the <a href="https://runescape.wiki/w/Completionist_Cape_(achievement)" rel="noopener" target="_blank">RuneScape Wiki</a>{% if comp.source %}, synced {{ comp.source.fetched[:10] }}{% endif %}. Components are ticked off by hand.</p>
+  {% else %}
+  <p class="muted">No requirements loaded yet. Open <a href="/admin/comp">the checklist</a> and press “Sync from wiki”.</p>
+  {% endif %}
+</div>
+{% endif %}
 <div class="panel">
   <h2>Skills</h2>
   <div class="table-wrap"><table>

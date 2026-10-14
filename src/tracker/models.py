@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    BigInteger, DateTime, ForeignKey, Index, Integer, SmallInteger, Text, UniqueConstraint, func,
+    BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, SmallInteger, Text, UniqueConstraint, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -90,3 +90,33 @@ class IngestionRun(Base):
     rows_inserted: Mapped[int] = mapped_column(Integer, default=0)
     warning: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class WikiPage(Base):
+    """Last fetched rendered HTML of a wiki page; requirements are derived from it and can be rebuilt."""
+    __tablename__ = "wiki_pages"
+    title: Mapped[str] = mapped_column(Text, primary_key=True)
+    revid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    html: Mapped[str] = mapped_column(Text)
+
+
+class CompRequirement(Base):
+    """One completionist cape component. Never deleted: dropped from the wiki page => active = false."""
+    __tablename__ = "comp_requirements"
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    category: Mapped[str] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text, default="")
+    sort_order: Mapped[int] = mapped_column(Integer)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class CompCompletion(Base):
+    """A component the user ticked off by hand on /admin/comp."""
+    __tablename__ = "comp_completions"
+    requirement_key: Mapped[str] = mapped_column(ForeignKey("comp_requirements.key", ondelete="CASCADE"),
+                                                 primary_key=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

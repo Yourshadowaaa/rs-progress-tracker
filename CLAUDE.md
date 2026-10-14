@@ -61,9 +61,10 @@ Railway project
 | `src/tracker/parser/rules.py` | Ordered regex `RULES` list (first match wins), `PARSER_VERSION` |
 | `src/tracker/web/app.py` | Pages, `/api/*` JSON, CSV exports, `/health`, `/livez`, DB-error handler (503 page that names the fix) |
 | `src/tracker/web/queries.py` | All dashboard SQL. Buckets are computed in `DISPLAY_TZ` (Europe/Berlin) |
-| `src/tracker/web/admin.py` | `/admin` + `POST /admin/refresh`: HTTP Basic auth (`ADMIN_PASSWORD`), CSRF token, cooldown, background thread |
+| `src/tracker/web/admin.py` | `/admin` + `POST /admin/refresh`: HTTP Basic auth (`ADMIN_PASSWORD`), CSRF token, cooldown, background thread. `/admin/comp` checklist: `POST /admin/comp` (save ticks), `POST /admin/comp/sync` (fetch the wiki page) |
+| `src/tracker/clients/wiki.py` / `jobs/comp_cape.py` | Completionist cape: MediaWiki `action=parse` fetch, generic `wikitable` extractor, requirement sync (deactivate, never delete), tick saving |
 | `src/tracker/web/static/app.js` | Chart rendering, one `Tracker.*Page()` per page. Colours come from CSS variables in `style.css` |
-| `alembic/versions/` | 0001 schema + view, 0002 skill seed, 0003 `ingestion_runs.trigger` |
+| `alembic/versions/` | 0001 schema + view, 0002 skill seed, 0003 `ingestion_runs.trigger`, 0004 `wiki_pages` / `comp_requirements` / `comp_completions` |
 | `tests/` | Unit tests plus Postgres integration tests. Fixtures in `tests/fixtures/` (the `*_synthetic*` ones are not real API captures) |
 
 ## Invariants: don't break these
@@ -85,9 +86,10 @@ Railway project
 6. **Jobs never crash-loop.**
    - Failures are recorded in `ingestion_runs` and the process exits 0.
    - Health counts as degraded when a job's latest run failed, or it has had no success for 2 hours.
-7. **The public site is read-only.** The only write endpoint is `POST /admin/refresh`, behind
-   Basic auth plus CSRF. `test_only_get_routes_exist_except_force_update` enforces this. Don't add
-   write routes without auth.
+7. **The public site is read-only.** The only write endpoints are `POST /admin/refresh`,
+   `POST /admin/comp` and `POST /admin/comp/sync`, all behind Basic auth plus CSRF.
+   `test_only_get_routes_exist_except_admin_writes` enforces this. Don't add write routes without
+   auth, and never render the CSRF token on a public page.
 8. **Polite to Jagex.**
    - Identifiable User-Agent, at most hourly automatic polling, retry with backoff only on 5xx and
      429 responses and network errors.
@@ -154,5 +156,8 @@ CI (`.github/workflows/ci.yml`) runs the full suite against a Postgres 16 servic
   - Railway config-as-code field names
   - backup upload to S3 or a Railway bucket
 - Invention uses the elite XP curve, which isn't tabulated, so it shows no next-level progress.
+- Completionist cape extractor (`jobs/comp_cape.py`) was written against a synthetic page
+  (`tests/fixtures/comp_cape_synthetic.html`) because the wiki is blocked from the sandbox. Check the
+  first real sync, and replace the fixture with the real HTML (download it from `/admin/comp`).
 - Optional, not built: backfill from the RuneMetrics `xp-monthly` endpoint. The URL is already in
   `clients/runemetrics.py` as `MONTHLY_URL`.

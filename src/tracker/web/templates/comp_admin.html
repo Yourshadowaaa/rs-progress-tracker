@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Completionist cape{% endblock %}
+{% block content %}
+<div class="filters" style="justify-content: space-between"><h1 style="margin:0">Completionist cape</h1><a href="/admin">← Admin</a></div>
+{% set messages = {
+  'saved': ('ok', '✓ Checklist saved.'),
+  'synced': ('ok', '✓ Requirements synced from the wiki: ' ~ (detail or '') ~ '.'),
+  'sync_failed': ('bad', '✕ Sync failed: ' ~ (detail or 'unknown error') ~ '. Nothing was changed.'),
+} %}
+{% if message in messages %}
+<div class="panel"><span class="pill {{ messages[message][0] }}"><span class="dot"></span>{{ messages[message][1] }}</span></div>
+{% endif %}
+<div class="panel">
+  <h2>Requirements from the RuneScape Wiki</h2>
+  <p>Source: <a href="https://runescape.wiki/w/{{ wiki_page | replace(' ', '_') }}" rel="noopener" target="_blank">{{ wiki_page }}</a>.
+    {% if comp.source %}Last synced {{ comp.source.fetched[:16] | replace('T', ' ') }} (revision {{ comp.source.revid or '?' }}).{% else %}Not synced yet.{% endif %}</p>
+  <form method="post" action="/admin/comp/sync" class="filters">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit" class="primary">Sync from wiki</button>
+    {% if comp.source %}<a href="/admin/comp/source.html">Download the stored page HTML</a>{% endif %}
+  </form>
+  <p class="note">Syncing adds new requirements and hides ones the page no longer lists. Your ticks are kept.</p>
+</div>
+{% if comp.total %}
+<form method="post" action="/admin/comp" id="comp-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="panel">
+    {% include "_comp_bar.html" %}
+    <div class="filters" style="margin: 12px 0 0"><button type="submit" class="primary">Save checklist</button>
+      <span class="note" id="comp-dirty" hidden>Unsaved changes</span></div>
+  </div>
+  {% for cat in comp.categories %}
+  <details class="panel comp-cat" {% if cat.done < cat.total %}open{% endif %}>
+    <summary><span>{{ cat.name }}</span><span class="muted num">{{ cat.done }} / {{ cat.total }}</span></summary>
+    <label class="comp-item comp-all"><input type="checkbox" data-all {% if cat.done == cat.total %}checked{% endif %}> <span class="muted">All in {{ cat.name }}</span></label>
+    {% for it in cat['items'] %}
+    <label class="comp-item"><input type="checkbox" name="done" value="{{ it.key }}" {% if it.done %}checked{% endif %}>
+      <span><span class="comp-name">{{ it.name }}</span>{% if it.description %}<span class="note comp-desc">{{ it.description }}</span>{% endif %}</span></label>
+    {% endfor %}
+  </details>
+  {% endfor %}
+  <div class="panel"><button type="submit" class="primary">Save checklist</button></div>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script>document.addEventListener("DOMContentLoaded", () => Tracker.compAdminPage());</script>{% endblock %}

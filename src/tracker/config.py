@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # Minimum minutes between runs of the same job; protects against double-fired crons.
     min_run_interval_min: int = 50
 
+    # Completionist cape checklist: requirements come from this RuneScape Wiki page (MediaWiki API).
+    wiki_api_url: str = "https://runescape.wiki/api.php"
+    comp_cape_page: str = "Completionist Cape (achievement)"
+
     # Force-update button (/admin). Disabled unless ADMIN_PASSWORD is set.
     admin_username: str = "admin"
     admin_password: str | None = None

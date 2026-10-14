@@ -10,15 +10,19 @@ import hmac
 import logging
 import secrets
 import threading
+from urllib.parse import urlencode
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import text
 
 from ..config import get_settings
 from ..db import get_engine
+from ..clients.http import UpstreamError, make_client
+from ..clients.wiki import fetch_page
+from ..jobs import comp_cape
 from ..jobs.runner import run_all
 
 log = logging.getLogger("tracker.admin")
@@ -96,8 +100,59 @@ def admin_page(request: Request, user: str = Depends(require_admin)):
                     cooldown_min=get_settings().force_update_cooldown_min)
 
 
-@router.post("/admin/refresh")
-def force_update(csrf: str = Form(""), user: str = Depends(require_admin)):
+def check_csrf(csrf: str) -> None:
     if not secrets.compare_digest(csrf.encode(), csrf_token().encode()):
         raise HTTPException(403, "Invalid form token; reload the admin page and try again")
+
+
+@router.post("/admin/refresh")
+def force_update(csrf: str = Form(""), user: str = Depends(require_admin)):
+    check_csrf(csrf)
     return RedirectResponse(f"/admin?result={start_force_update()}", status_code=303)
+
+
+# ---------------------------------------------------------------- completionist cape checklist
+
+
+@router.get("/admin/comp", response_class=HTMLResponse)
+def comp_page(request: Request, user: str = Depends(require_admin)):
+    from .app import page, q
+
+    with get_engine().connect() as conn:
+        return page(request, "comp_admin.html", conn, active="admin", user=user, csrf=csrf_token(),
+                    comp=q.comp_progress(conn, get_settings().display_tz),
+                    message=request.query_params.get("result"), detail=request.query_params.get("detail"),
+                    wiki_page=get_settings().comp_cape_page)
+
+
+@router.post("/admin/comp")
+def comp_save(csrf: str = Form(""), done: list[str] = Form([]), user: str = Depends(require_admin)):
+    check_csrf(csrf)
+    count = comp_cape.save_completions(get_engine(), set(done))
+    log.info("completionist checklist saved: %d done", count)
+    return RedirectResponse("/admin/comp?result=saved", status_code=303)
+
+
+@router.post("/admin/comp/sync")
+def comp_sync(csrf: str = Form(""), user: str = Depends(require_admin)):
+    check_csrf(csrf)
+    try:
+        with make_client() as client:
+            page = fetch_page(client, get_settings().comp_cape_page)
+        result = comp_cape.sync_requirements(get_engine(), page)
+    except (UpstreamError, comp_cape.NoRequirementsFound) as exc:
+        log.warning("completionist requirement sync failed: %s", exc)
+        return RedirectResponse("/admin/comp?" + urlencode({"result": "sync_failed", "detail": str(exc)[:300]}),
+                                status_code=303)
+    log.info("completionist requirements synced: %s", result.summary())
+    return RedirectResponse("/admin/comp?" + urlencode({"result": "synced", "detail": result.summary()}),
+                            status_code=303)
+
+
+@router.get("/admin/comp/source.html")
+def comp_source(user: str = Depends(require_admin)):
+    """The stored wiki HTML as plain text, for checking what the requirement extractor saw."""
+    page = comp_cape.stored_page(get_engine(), get_settings().comp_cape_page)
+    if page is None:
+        raise HTTPException(404, "the wiki page has not been fetched yet")
+    return PlainTextResponse(page.html, headers={"Content-Disposition": 'attachment; filename="comp_cape.html"'})

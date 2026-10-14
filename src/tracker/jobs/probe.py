@@ -68,6 +68,23 @@ def run_probe(out_dir: str = "probe_output") -> None:
         except Exception as exc:  # noqa: BLE001
             report.append(f"xp-monthly: {type(exc).__name__}: {exc}")
 
+        try:
+            from ..clients.wiki import fetch_page
+            from .comp_cape import parse_requirements
+
+            page = fetch_page(client, s.comp_cape_page)
+            (out / "comp_cape.html").write_text(page.html)
+            reqs = parse_requirements(page.html)
+            report.append(f"wiki {s.comp_cape_page!r} revision {page.revid}: {len(page.html)} bytes, "
+                          f"{len(reqs)} requirements parsed")
+            counts: dict[str, int] = {}
+            for r in reqs:
+                counts[r.category] = counts.get(r.category, 0) + 1
+            report.extend(f"  {n:4} {cat}" for cat, n in counts.items())
+            report.extend(f"  e.g. [{r.category}] {r.name} | {r.description[:80]}" for r in reqs[:5])
+        except Exception as exc:  # noqa: BLE001
+            report.append(f"wiki {s.comp_cape_page!r}: {type(exc).__name__}: {exc}")
+
     text = "\n".join(report)
     (out / "report.txt").write_text(text + "\n")
     print(text)

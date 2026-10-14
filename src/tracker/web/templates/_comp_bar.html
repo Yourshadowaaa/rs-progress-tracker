@@ -1,0 +1,5 @@
+<div class="comp-total">
+  <span class="value">{{ comp.pct }}%</span>
+  <span class="muted">{{ comp.done }} of {{ comp.total }} components complete</span>
+</div>
+<div class="bar big{% if comp.done == comp.total %} complete{% endif %}" role="img" aria-label="{{ comp.pct }}% of completionist cape requirements complete"><span style="width: {{ comp.pct }}%"></span></div>

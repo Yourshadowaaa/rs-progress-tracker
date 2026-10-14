@@ -262,7 +262,8 @@ def overview(request: Request, conn: Connection = Depends(get_conn)):
     pid = pid_or_none(conn)
     levels = q.levels_table(conn, pid, ctx()[1]) if pid else []
     cards = q.summary_cards(conn, pid, ctx()[1]) if pid else None
-    return page(request, "overview.html", conn, levels=levels, cards=cards, active="overview")
+    return page(request, "overview.html", conn, levels=levels, cards=cards, comp=q.comp_progress(conn, ctx()[1]),
+                active="overview")
 
 
 @app.get("/xp", response_class=HTMLResponse)

@@ -6,6 +6,9 @@ Commands:
   reparse [--all]    rebuild adventure_events from adventure_log_raw
   probe [--out DIR]  verify endpoints and save raw responses
   export-corpus      print stored distinct log entries as JSONL (to grow the parser test corpus)
+  comp-sync [--stored | --from-file PATH]
+                     sync completionist cape requirements from the wiki (or re-derive them from the
+                     stored page, or from a saved HTML file)
 """
 
 import argparse
@@ -44,10 +47,13 @@ def check_schema(engine: Engine) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m tracker.jobs")
-    parser.add_argument("command", choices=["run-all", "xp", "log", "backup", "reparse", "probe", "export-corpus"])
+    parser.add_argument("command", choices=["run-all", "xp", "log", "backup", "reparse", "probe", "export-corpus",
+                                            "comp-sync"])
     parser.add_argument("--all", action="store_true", help="reparse: rebuild every event")
     parser.add_argument("--force", action="store_true", help="ignore the min-interval double-fire guard")
     parser.add_argument("--out", default="probe_output")
+    parser.add_argument("--stored", action="store_true", help="comp-sync: re-derive from the stored page")
+    parser.add_argument("--from-file", help="comp-sync: read the page HTML from this file")
     args = parser.parse_args(argv)
     configure_logging()
 
@@ -77,6 +83,21 @@ def main(argv: list[str] | None = None) -> int:
                 select(AdventureLogRaw.text, AdventureLogRaw.details).distinct().order_by(AdventureLogRaw.text)
             ):
                 sys.stdout.write(json.dumps({"text": text, "details": details, "source": "live"}) + "\n")
+    elif args.command == "comp-sync":
+        from ..clients.wiki import WikiPage, fetch_page
+        from .comp_cape import stored_page, sync_requirements
+
+        title = settings.comp_cape_page
+        if args.from_file:
+            page = WikiPage(title=title, revid=None, html=open(args.from_file, encoding="utf-8").read())
+        elif args.stored:
+            page = stored_page(engine, title)
+            if page is None:
+                raise SystemExit(f"no stored copy of {title!r}: run comp-sync without --stored first")
+        else:
+            with make_client() as client:
+                page = fetch_page(client, title)
+        log.info("completionist requirements synced: %s", sync_requirements(engine, page).summary())
     # Job failures are recorded in ingestion_runs; exit 0 so cron never retry-loops.
     return 0
 
