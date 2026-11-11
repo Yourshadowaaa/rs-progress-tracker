@@ -3,21 +3,27 @@
     python -m tracker.jobs probe [--out probe_output]
 
 Saves raw responses and prints a report: hiscores status per table and name encoding, line
-count, RuneMetrics status, activity timestamps vs now (to infer the log's timezone), and the
-parser result for each activity. Commit the findings to docs/verification.md and copy useful
+count, Adventurer's Log API playerEvents (type, date with offset, parser result per event) and
+playerData (XP per skill next to the hiscores XP). Commit the findings to docs/verification.md and copy useful
 responses into tests/fixtures/.
 """
 
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import quote
 
+from ..clients.adventurers_log import (
+    EVENTS_URL,
+    events_url,
+    parse_events,
+    parse_player_data,
+    player_data_url,
+)
 from ..clients.hiscores import name_variants, parse_lite
 from ..clients.http import make_client
-from ..clients.runemetrics import MONTHLY_URL, parse_profile, profile_url
 from ..config import get_settings
 from ..parser.engine import match_rule
+from ..reference import ALL_SKILLS
 
 
 def run_probe(out_dir: str = "probe_output") -> None:
@@ -42,31 +48,52 @@ def run_probe(out_dir: str = "probe_output") -> None:
                     line = f"hiscores {table} enc={label}: {type(exc).__name__}: {exc}"
                 report.append(line)
 
-        try:
-            resp = client.get(profile_url(s.player_name))
-            report.append(f"runemetrics profile -> HTTP {resp.status_code}")
-            (out / "runemetrics_profile.json").write_text(resp.text)
-            profile = parse_profile(resp.json())
-            now = datetime.now(UTC)
-            report.append(f"  {len(profile.activities)} activities, {len(profile.skills)} skill rows")
-            if profile.activities:
-                newest = profile.activities[0].time_utc
-                report.append(f"  newest activity {newest:%Y-%m-%d %H:%M} (as UTC); now {now:%Y-%m-%d %H:%M} UTC; "
-                              f"diff {(now - newest).total_seconds() / 3600:+.2f} h (negative => not UTC)")
-            with (out / "activities.jsonl").open("w") as f:
-                for a in profile.activities:
-                    rule, ev = match_rule(a.text, a.details)
-                    f.write(json.dumps({"date": a.raw.get("date"), "text": a.text, "details": a.details}) + "\n")
-                    report.append(f"  [{rule:16}] {ev.event_type:14} {ev.subject!r} x{ev.count} | {a.text!r}")
-        except Exception as exc:  # noqa: BLE001
-            report.append(f"runemetrics profile: {type(exc).__name__}: {exc}")
+        hiscore_xp: dict[int, int] = {}
+        regular = out / "hiscores_hiscore.csv"
+        if regular.exists():
+            hiscore_xp = {r.skill_id: r.xp for r in parse_lite(regular.read_text())}
+
+        events_resp = None
+        for encoded in name_variants(s.player_name):
+            url = EVENTS_URL.format(name=encoded)
+            try:
+                events_resp = client.get(url)
+                report.append(f"playerEvents player={encoded:18} -> HTTP {events_resp.status_code}: "
+                              f"{events_resp.text[:80]!r}" if events_resp.status_code != 200
+                              else f"playerEvents player={encoded:18} -> HTTP 200")
+            except Exception as exc:  # noqa: BLE001
+                report.append(f"playerEvents player={encoded}: {type(exc).__name__}: {exc}")
+                events_resp = None
+            if events_resp is not None and events_resp.status_code == 200:
+                break
+        if events_resp is not None:
+            (out / "adventurers_log_events.json").write_text(events_resp.text)
+            try:
+                activities = parse_events(events_resp.json())
+                now = datetime.now(UTC)
+                report.append(f"  {len(activities)} events (url {events_url(s.player_name)})")
+                with (out / "activities.jsonl").open("w") as f:
+                    for a in activities:
+                        rule, ev = match_rule(a.text, a.details)
+                        f.write(json.dumps({"date": a.raw.get("date"), "type": a.event_type, "text": a.text,
+                                            "details": a.details}) + "\n")
+                        report.append(f"  {a.raw.get('date')} ({(now - a.time_utc).total_seconds() / 3600:6.2f} h ago) "
+                                      f"{a.event_type} [{rule:16}] {ev.event_type:14} {ev.subject!r} x{ev.count} "
+                                      f"| {a.text!r} | {a.details!r}")
+            except Exception as exc:  # noqa: BLE001
+                report.append(f"  playerEvents parse: {type(exc).__name__}: {exc}")
 
         try:
-            resp = client.get(MONTHLY_URL.format(name=quote(s.player_name), skill=-1))
-            report.append(f"xp-monthly -> HTTP {resp.status_code}, {len(resp.content)} bytes")
-            (out / "xp_monthly.json").write_text(resp.text)
+            resp = client.get(player_data_url(s.player_name))
+            report.append(f"playerData includeSkills -> HTTP {resp.status_code}")
+            (out / "adventurers_log_player_data.json").write_text(resp.text)
+            rows = parse_player_data(resp.json())
+            for r in rows:
+                hs = hiscore_xp.get(r.skill_id)
+                diff = "" if hs is None else f" hiscores xp={hs:>11} diff={r.xp - hs:+}"
+                report.append(f"  {ALL_SKILLS[r.skill_id]:14} level={r.level:4} xp={r.xp:>11}{diff}")
         except Exception as exc:  # noqa: BLE001
-            report.append(f"xp-monthly: {type(exc).__name__}: {exc}")
+            report.append(f"playerData: {type(exc).__name__}: {exc}")
 
         try:
             from ..clients.wiki import fetch_page

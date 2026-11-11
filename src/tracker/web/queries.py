@@ -310,7 +310,8 @@ def health(conn: Connection, tz: str) -> dict:
             },
         }
     profile_private = bool(conn.execute(text("""
-        SELECT error LIKE '%PROFILE_PRIVATE%' FROM ingestion_runs WHERE source = 'adventure_log'
+        SELECT error LIKE '%PROFILE_PRIVATE%' OR error LIKE '%PLAYER_NOT_FOUND%' OR error LIKE 'PlayerHidden%'
+        FROM ingestion_runs WHERE source = 'adventure_log'
         ORDER BY started_at DESC LIMIT 1""")).scalar())
     return {"jobs": jobs, "profile_private": profile_private,
             "status": "ok" if jobs and not any(j["stale"] or j["failing"] for j in jobs.values()) else "degraded"}

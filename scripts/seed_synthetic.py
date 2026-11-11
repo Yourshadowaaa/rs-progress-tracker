@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 
-from tracker.clients.runemetrics import Activity
+from tracker.clients.adventurers_log import Activity
 from tracker.config import get_settings
 from tracker.db import get_engine
 from tracker.jobs.adventure_log import store_activities

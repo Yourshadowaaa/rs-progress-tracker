@@ -7,7 +7,7 @@ from sqlalchemy import func, select, text
 
 from tests.conftest import load_fixture, load_json
 from tracker.clients.hiscores import hiscores_url
-from tracker.clients.runemetrics import profile_url
+from tracker.clients.adventurers_log import events_url
 from tracker.jobs import runner
 from tracker.models import IngestionRun, XpSnapshot
 from tracker.web import admin
@@ -78,8 +78,8 @@ def test_post_requires_csrf_token(admin_client):
 def test_force_update_runs_jobs_then_enforces_cooldown(admin_client, engine):
     respx.get(hiscores_url("hiscore_ironman", "Get Grouped")).mock(
         return_value=httpx.Response(200, text=load_fixture("hiscores_ironman_synthetic.csv")))
-    respx.get(profile_url("Get Grouped")).mock(
-        return_value=httpx.Response(200, json=load_json("runemetrics_profile_synthetic.json")))
+    respx.get(events_url("Get Grouped")).mock(
+        return_value=httpx.Response(200, json=load_json("adventurers_log_events_synthetic.json")))
     r = admin_client.post("/admin/refresh", auth=AUTH, data={"csrf": admin.csrf_token()}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/admin?result=started"
     wait_for_manual_run()
@@ -103,8 +103,8 @@ def test_manual_run_refreshes_current_hour_snapshot(engine, settings, monkeypatc
     newer = "\n".join([lines[0], f"{rank},{level},{int(xp) + 5000}", *lines[2:]])
     respx.get(hiscores_url("hiscore_ironman", "Get Grouped")).mock(
         side_effect=[httpx.Response(200, text=body), httpx.Response(200, text=newer)])
-    respx.get(profile_url("Get Grouped")).mock(
-        return_value=httpx.Response(200, json=load_json("runemetrics_profile_synthetic.json")))
+    respx.get(events_url("Get Grouped")).mock(
+        return_value=httpx.Response(200, json=load_json("adventurers_log_events_synthetic.json")))
     runner.run_all(engine)  # scheduled run
     runner.run_all(engine, trigger="manual")  # force update in the same hour
     with engine.connect() as conn:

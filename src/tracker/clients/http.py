@@ -19,8 +19,8 @@ class NotFound(UpstreamError):
     """Endpoint returned 404 (for hiscores: player not on this table)."""
 
 
-class ProfilePrivate(UpstreamError):
-    """RuneMetrics refused the profile (PROFILE_PRIVATE, NO_PROFILE, ...)."""
+class PlayerHidden(UpstreamError):
+    """Adventurer's Log API answered PLAYER_NOT_FOUND (404): the player is hidden, renamed or does not exist."""
 
 
 def make_client() -> httpx.Client:

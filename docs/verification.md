@@ -2,9 +2,11 @@
 
 ## Environment limitation
 
-The code was built in a sandbox whose network proxy blocks `secure.runescape.com` and
-`apps.runescape.com` (HTTP 403). **No live response has been fetched yet.** Every fixture in
-`tests/fixtures/` whose name contains `synthetic`, and every corpus line with
+The code was built in a sandbox whose network proxy blocks `secure.runescape.com` (HTTP 403).
+RuneMetrics (`apps.runescape.com/runemetrics/...`) went offline on 10 Nov 2026; the adventure log and
+the XP fallback now use the Adventurer's Log API. **No live response has been fetched yet.** Every fixture in
+`tests/fixtures/` whose name contains `synthetic` (including the `adventurers_log_*_synthetic.json`
+files, built from the documented response shape), and every corpus line with
 `"source": "synthetic"`, follows the documented or commonly observed format but is a hypothesis
 until confirmed.
 
@@ -20,22 +22,32 @@ Record the results here:
 | 2 | Name encoding: `%20` and `+` both work? | report lines for each encoding | ☐ |
 | 3 | Ironman tables return 404 for this group ironman | report | ✅ confirmed by user |
 | 4 | Lite CSV has ≥ 30 `rank,level,xp` lines, Necromancy is line 30 | report line count; compare levels in-game | ☐ |
-| 5 | RuneMetrics profile is public (no `PROFILE_PRIVATE`) | report | ☐ |
-| 6 | `skillvalues` XP is ×10 | compare `runemetrics_profile.json` with hiscores CSV | ☐ |
-| 7 | Adventure log timestamps are UTC | report "diff" for a recent entry (≈ 0 to +1 h ⇒ UTC; −1/−2 h ⇒ UK/CET local) | ☐ |
-| 8 | Real log wording matches the parser rules | report lines show rule names; any `unparsed` ⇒ add rules | ☐ |
-| 9 | Monthly XP endpoint reachable (optional) | report | ☐ |
+| 5 | `playerEvents/Get%20Grouped` returns 200 with events (event visibility on, `%20` accepted) | report `playerEvents player=Get%20Grouped -> HTTP 200` | ☐ |
+| 6 | Player Data `fine_xp` is ×10 | report: `diff=+0` against the hiscores XP for every skill | ☐ |
+| 7 | Event dates carry an offset and line up with real time | report: `date` and "h ago" per event | ✅ by API docs for new events; legacy rows (RuneMetrics era) still assumed UTC, unverified |
+| 8 | Real log wording matches the parser rules, and matches the RuneMetrics-era wording | report lines show rule names; any `unparsed` ⇒ add rules; compare with `export-corpus` | ☐ |
+| 9 | Hidden player gives 404 `{"error":"PLAYER_NOT_FOUND"}` | only if it happens: `/status` shows the "not found or hidden" banner | ☐ |
+| 10 | Cutover: the first run after the switch inserts no duplicates of rows stored before 10 Nov | `/status` warning "cutover: N entries matched" or a gap warning; query below | ☐ |
 
 After the probe:
 
 1. Copy `probe_output/hiscores_hiscore.csv` to `tests/fixtures/hiscores_regular_live.csv` and
-   `runemetrics_profile.json` to `tests/fixtures/runemetrics_profile_live.json`, then add tests that
-   use them.
+   `adventurers_log_events.json` / `adventurers_log_player_data.json` to
+   `tests/fixtures/adventurers_log_events_live.json` / `adventurers_log_player_data_live.json`, then add
+   tests that use them.
 2. Append real entries (`python -m tracker.jobs export-corpus`) to `tests/fixtures/log_corpus.jsonl`
    with `"source": "live"` and their expected events. Fix any rules that disagree, bump
    `PARSER_VERSION` and run `reparse`.
-3. If item 7 shows the log is not UTC, change `parse_activity_time` in `clients/runemetrics.py`,
-   then fix existing rows with a one-off migration.
+3. If the live wording differs from the RuneMetrics era only in whitespace or punctuation, normalise it in
+   `entry_key` only (never in stored text), otherwise legacy rows won't dedupe.
+4. Check the cutover (expect no row pairs with the same text a whole number of hours apart):
+
+   ```sql
+   SELECT a.entry_time_utc, b.entry_time_utc, a.text FROM adventure_log_raw a
+   JOIN adventure_log_raw b ON a.text = b.text AND a.details = b.details AND a.id < b.id
+   WHERE NOT a.payload ? 'type' AND b.payload ? 'type'
+     AND abs(extract(epoch FROM b.entry_time_utc - a.entry_time_utc)) <= 14 * 3600;
+   ```
 
 ## 7-day soak (acceptance)
 
@@ -59,13 +71,15 @@ SELECT started_at, warning FROM ingestion_runs WHERE source = 'adventure_log' AN
 
 ## Verified in the sandbox
 
-- 55 tests pass against PostgreSQL 16. They cover:
+- 95 tests pass against PostgreSQL 16. They cover:
   - parser corpus and unparsed rate
-  - hiscores and RuneMetrics parsing, including XP ÷ 10 and `PROFILE_PRIVATE`
+  - hiscores and Adventurer's Log API parsing, including `fine_xp` ÷ 10, skill key mapping, ISO dates with
+    offsets and `PLAYER_NOT_FOUND`
   - retry and backoff
   - idempotent XP snapshots
   - a 404 failing without fallback
-  - fallback to RuneMetrics
+  - fallback to Player Data (no ranks)
+  - RuneMetrics cutover guard (exact match, whole-hour offset, genuine repeats still inserted)
   - XP-decrease flag
   - delta sums equal to last minus first
   - occurrence dedupe across sliding windows

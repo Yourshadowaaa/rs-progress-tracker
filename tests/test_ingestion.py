@@ -9,14 +9,15 @@ from sqlalchemy import func, select, text
 
 from tests.conftest import load_fixture, load_json
 from tracker.clients.hiscores import hiscores_url
-from tracker.clients.runemetrics import Activity, parse_profile, profile_url
+from tracker.clients.adventurers_log import Activity, events_url, parse_events, player_data_url
 from tracker.jobs.adventure_log import reparse, store_activities
 from tracker.jobs.runs import RunResult, tracked_run
 from tracker.jobs.xp_snapshot import run_xp_job
 from tracker.models import AdventureEvent, AdventureLogRaw, IngestionRun, XpSnapshot
 
 HISCORES = hiscores_url("hiscore_ironman", "Get Grouped")
-PROFILE = profile_url("Get Grouped")
+EVENTS = events_url("Get Grouped")
+PLAYER_DATA = player_data_url("Get Grouped")
 NOW = datetime(2026, 10, 13, 10, 0, 37, tzinfo=UTC)
 
 
@@ -25,9 +26,18 @@ def count(engine, model, *where):
         return conn.execute(select(func.count()).select_from(model).where(*where)).scalar()
 
 
-def act(minute: int, text_: str, details: str = "") -> Activity:
-    t = datetime(2026, 10, 13, 9, minute, tzinfo=UTC)
-    return Activity(t, text_, details or text_, {"date": t.strftime("%d-%b-%Y %H:%M"), "text": text_, "details": details})
+def act(minute: int, text_: str, details: str = "", second: int = 0, hour: int = 9, day: int = 13) -> Activity:
+    """An Adventurer's Log API event (payload carries a type)."""
+    t = datetime(2026, 10, day, hour, minute, second, tzinfo=UTC)
+    raw = {"date": t.isoformat(), "type": "rs_plog_npc_kill_count", "text": text_, "details": details or text_}
+    return Activity(t, text_, details or text_, raw, raw["type"])
+
+
+def legacy(minute: int, text_: str, details: str = "", hour: int = 9, day: int = 13) -> Activity:
+    """A RuneMetrics-era entry: minute precision, payload without a type."""
+    t = datetime(2026, 10, day, hour, minute, tzinfo=UTC)
+    return Activity(t, text_, details or text_, {"date": t.strftime("%d-%b-%Y %H:%M"), "text": text_,
+                                                 "details": details or text_})
 
 
 @respx.mock
@@ -63,13 +73,13 @@ def test_xp_job_tries_other_space_encodings(engine, settings):
 
 
 @respx.mock
-def test_xp_404_diagnoses_and_falls_back_to_runemetrics_not_regular_table(engine, settings):
+def test_xp_404_diagnoses_and_falls_back_to_player_data_not_regular_table(engine, settings):
     for enc in ("Get%20Grouped", "Get+Grouped", "Get_Grouped", "Get%A0Grouped"):
         respx.get(ironman_url(enc)).mock(return_value=httpx.Response(404))
     regular = respx.get(ironman_url("Get%20Grouped", "hiscore")).mock(
         return_value=httpx.Response(200, text="\n".join(["1,99,999999999"] * 30)))
-    data = load_json("runemetrics_profile_synthetic.json")
-    respx.get(PROFILE).mock(return_value=httpx.Response(200, json=data))
+    data = load_json("adventurers_log_player_data_synthetic.json")
+    respx.get(PLAYER_DATA).mock(return_value=httpx.Response(200, json=data))
     with httpx.Client() as client, tracked_run(engine, "xp") as result:
         run_xp_job(engine, settings, client, result, now=NOW)
     assert regular.called and result.status == "partial"
@@ -77,33 +87,35 @@ def test_xp_404_diagnoses_and_falls_back_to_runemetrics_not_regular_table(engine
     with engine.connect() as conn:
         attack = conn.execute(select(XpSnapshot.xp, XpSnapshot.source, XpSnapshot.rank)
                               .where(XpSnapshot.skill_id == 0)).one()
-    # XP comes from RuneMetrics, never from the regular table's numbers.
-    assert attack == (data["skillvalues"][0]["xp"] // 10, "runemetrics", None)
+    # XP comes from Player Data, never from the regular table's numbers.
+    assert attack == (data["skills"]["attack"]["fine_xp"] // 10, "adventurers_log", None)
 
 
 @respx.mock
-def test_xp_404_and_runemetrics_private_fails_loudly(engine, settings):
-    respx.get(url__startswith="https://secure.runescape.com/").mock(return_value=httpx.Response(404))
-    respx.get(PROFILE).mock(return_value=httpx.Response(200, json={"error": "PROFILE_PRIVATE"}))
+def test_xp_404_and_player_hidden_fails_loudly(engine, settings):
+    respx.get(url__startswith="https://secure.runescape.com/").mock(
+        return_value=httpx.Response(404, json={"error": "PLAYER_NOT_FOUND"}))
     with httpx.Client() as client, tracked_run(engine, "xp") as result:
         run_xp_job(engine, settings, client, result, now=NOW)
     assert result.status == "failed" and "TableMismatch" in result.error
-    assert "not on the regular hiscores either" in result.error and "PROFILE_PRIVATE" in result.error
+    assert "not on the regular hiscores either" in result.error and "PLAYER_NOT_FOUND" in result.error
     assert count(engine, XpSnapshot) == 0
 
 
 @respx.mock
-def test_xp_job_falls_back_to_runemetrics_on_outage(engine, settings):
+def test_xp_job_falls_back_to_player_data_on_outage(engine, settings):
     respx.get(HISCORES).mock(return_value=httpx.Response(503))
-    data = load_json("runemetrics_profile_synthetic.json")
-    respx.get(PROFILE).mock(return_value=httpx.Response(200, json=data))
+    data = load_json("adventurers_log_player_data_synthetic.json")
+    respx.get(PLAYER_DATA).mock(return_value=httpx.Response(200, json=data))
     with httpx.Client() as client:
         result = RunResult()
         run_xp_job(engine, settings, client, result, now=NOW)
     assert result.status == "partial" and result.rows_inserted == 30
     with engine.connect() as conn:
         attack = conn.execute(select(XpSnapshot.xp, XpSnapshot.source).where(XpSnapshot.skill_id == 0)).one()
-    assert attack == (data["skillvalues"][0]["xp"] // 10, "runemetrics")
+        ranks = conn.execute(select(XpSnapshot.rank).distinct()).scalars().all()
+    assert attack == (data["skills"]["attack"]["fine_xp"] // 10, "adventurers_log")
+    assert ranks == [None] and "Player Data" in result.warnings[0]
 
 
 @respx.mock
@@ -174,7 +186,7 @@ def test_gap_warning_when_no_overlap(engine, settings):
 
 
 def test_reparse_is_deterministic_and_does_not_duplicate(engine, settings):
-    acts = parse_profile(load_json("runemetrics_profile_synthetic.json")).activities
+    acts = parse_events(load_json("adventurers_log_events_synthetic.json"))
     store_activities(engine, settings, acts, RunResult())
     before = count(engine, AdventureEvent)
     with engine.begin() as conn:
@@ -195,7 +207,7 @@ def test_run_all_twice_is_idempotent(engine, settings, monkeypatch):
     import tracker.jobs.runner as cli
 
     respx.get(HISCORES).mock(return_value=httpx.Response(200, text=load_fixture("hiscores_ironman_synthetic.csv")))
-    respx.get(PROFILE).mock(return_value=httpx.Response(200, json=load_json("runemetrics_profile_synthetic.json")))
+    respx.get(EVENTS).mock(return_value=httpx.Response(200, json=load_json("adventurers_log_events_synthetic.json")))
     monkeypatch.setattr(cli, "get_settings", lambda: settings)
     monkeypatch.setattr("tracker.clients.http.get_settings", lambda: settings)
     cli.run_all(engine)
@@ -210,13 +222,15 @@ def test_run_all_twice_is_idempotent(engine, settings, monkeypatch):
 
 
 @respx.mock
-def test_profile_private_recorded_as_failed_run(engine, settings):
+def test_hidden_player_recorded_as_failed_run(engine, settings):
     from tracker.jobs.adventure_log import run_log_job
 
-    respx.get(PROFILE).mock(return_value=httpx.Response(200, json={"error": "PROFILE_PRIVATE", "loggedIn": "false"}))
+    respx.get(EVENTS).mock(return_value=httpx.Response(404, json=load_json("adventurers_log_not_found.json")))
     with httpx.Client() as client, tracked_run(engine, "adventure_log") as result:
         run_log_job(engine, settings, client, result)
-    assert result.status == "failed" and "PROFILE_PRIVATE" in result.error
+    assert result.status == "failed" and result.error.startswith("PlayerHidden") and "PLAYER_NOT_FOUND" in result.error
+    with engine.connect() as conn:
+        assert conn.execute(select(IngestionRun.status)).scalar() == "failed"
 
 
 def test_default_table_is_regular_for_group_ironman(monkeypatch):
@@ -227,13 +241,101 @@ def test_default_table_is_regular_for_group_ironman(monkeypatch):
 
 
 @respx.mock
-def test_regular_table_fallback_keeps_runemetrics_ranks(engine, settings):
+def test_regular_table_fallback_has_no_ranks(engine, settings):
     regular = settings.model_copy(update={"hiscore_table": "hiscore"})
     respx.get(hiscores_url("hiscore", "Get Grouped")).mock(return_value=httpx.Response(503))
-    data = load_json("runemetrics_profile_synthetic.json")
-    respx.get(PROFILE).mock(return_value=httpx.Response(200, json=data))
+    respx.get(PLAYER_DATA).mock(
+        return_value=httpx.Response(200, json=load_json("adventurers_log_player_data_synthetic.json")))
     with httpx.Client() as client:
         run_xp_job(engine, regular, client, RunResult(), now=NOW)
     with engine.connect() as conn:
-        rank = conn.execute(select(XpSnapshot.rank).where(XpSnapshot.skill_id == 0)).scalar()
-    assert rank == data["skillvalues"][0]["rank"]
+        assert conn.execute(select(XpSnapshot.rank).distinct()).scalars().all() == [None]
+
+
+def raw_rows(engine):
+    with engine.connect() as conn:
+        return conn.execute(select(AdventureLogRaw.entry_time_utc, AdventureLogRaw.text, AdventureLogRaw.occurrence)
+                            .order_by(AdventureLogRaw.entry_time_utc, AdventureLogRaw.id)).all()
+
+
+def test_event_times_with_offset_stored_as_utc_and_refetch_inserts_nothing(engine, settings):
+    acts = parse_events(load_json("adventurers_log_events_synthetic.json"))
+    r1, r2 = RunResult(), RunResult()
+    store_activities(engine, settings, acts, r1)
+    store_activities(engine, settings, parse_events(load_json("adventurers_log_events_synthetic.json")), r2)
+    assert r1.rows_inserted == 8 and r2.rows_inserted == 0 and r2.status == "ok"
+    with engine.connect() as conn:
+        quest = conn.execute(select(AdventureLogRaw.entry_time_utc, AdventureLogRaw.payload)
+                             .where(AdventureLogRaw.text.like("Quest complete%"))).one()
+        kk = conn.execute(select(func.count()).select_from(AdventureLogRaw)
+                          .where(AdventureLogRaw.text == "I killed  4 Kalphite Kings.")).scalar()
+    assert quest[0] == datetime(2026, 10, 12, 22, 3, 50, tzinfo=UTC) and quest[1]["type"] == "rs_plog_quest"
+    assert kk == 2  # two identical entries in the same minute (different seconds) are both kept
+
+
+def test_seconds_do_not_break_dedupe_against_minute_precision_legacy_rows(engine, settings):
+    store_activities(engine, settings, [legacy(50, "I killed  4 Kalphite Kings."), legacy(41, "Levelled up Attack.")],
+                     RunResult())
+    r = RunResult()
+    store_activities(engine, settings, [act(58, "I found a New thing", second=3),
+                                        act(50, "I killed  4 Kalphite Kings.", second=47),
+                                        act(41, "Levelled up Attack.", second=9)], r)
+    assert r.rows_inserted == 1 and r.status == "ok"
+
+
+def test_cutover_guard_skips_legacy_rows_shifted_by_whole_hours(engine, settings):
+    # Legacy row stored at 10:01 "UTC" but really 09:01 UTC (log was UK time).
+    store_activities(engine, settings, [legacy(1, "Levelled up Attack.", hour=10)], RunResult())
+    fetched = [act(30, "Levelled up Magic.", hour=11), act(1, "Levelled up Attack.", second=40, hour=9)]
+    r = RunResult()
+    store_activities(engine, settings, fetched, r)
+    assert r.rows_inserted == 1 and any("cutover: 1" in w for w in r.warnings)
+    assert not any("possible gap" in w for w in r.warnings)
+    r = RunResult()
+    store_activities(engine, settings, fetched, r)  # idempotent: the same legacy row matches again
+    assert r.rows_inserted == 0
+    assert [t for _, t, _ in raw_rows(engine)] == ["Levelled up Attack.", "Levelled up Magic."]
+
+
+def test_cutover_guard_identical_pair_with_one_legacy_counterpart(engine, settings):
+    store_activities(engine, settings, [legacy(50, "I killed  4 Kalphite Kings.", hour=9)], RunResult())
+    pair = [act(50, "I killed  4 Kalphite Kings.", second=s, hour=8) for s in (5, 6)]
+    r = RunResult()
+    store_activities(engine, settings, pair, r)
+    assert r.rows_inserted == 1
+    r = RunResult()
+    store_activities(engine, settings, pair, r)
+    assert r.rows_inserted == 0 and count(engine, AdventureLogRaw) == 2
+
+
+def test_cutover_guard_does_not_swallow_genuine_repeats(engine, settings):
+    store_activities(engine, settings, [legacy(1, "I killed  4 Kalphite Kings.", hour=10, day=10)], RunResult())
+    # Same text, far beyond the newest legacy row + 14 h: a new kill, must be inserted.
+    r = RunResult()
+    store_activities(engine, settings, [act(1, "I killed  4 Kalphite Kings.", hour=10, day=12)], r)
+    assert r.rows_inserted == 1 and not any("cutover" in w for w in r.warnings)
+    # Within the window but no legacy row left to match after the first one is consumed.
+    r = RunResult()
+    store_activities(engine, settings, [act(2, "I killed  4 Kalphite Kings.", hour=9, day=10),
+                                        act(3, "I killed  4 Kalphite Kings.", hour=9, day=10)], r)
+    assert r.rows_inserted == 1 and any("cutover: 1" in w for w in r.warnings)
+    # Entries from the new API never act as legacy counterparts.
+    r = RunResult()
+    store_activities(engine, settings, [act(5, "I killed  4 Kalphite Kings.", hour=11, day=12)], r)
+    assert r.rows_inserted == 1
+
+
+def test_gap_warning_after_runemetrics_shutdown(engine, settings):
+    store_activities(engine, settings, [legacy(1, "Levelled up Attack.")], RunResult())
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO ingestion_runs (source, started_at, finished_at, status, rows_inserted) VALUES "
+                          "('adventure_log', '2026-11-10 06:00+00', '2026-11-10 06:00+00', 'ok', 1)"))
+    r = RunResult()
+    store_activities(engine, settings, [act(2, "I found a New thing", day=11)], r)
+    assert "possible gap" in r.warnings[0] and "RuneMetrics went offline" in r.warnings[0]
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO ingestion_runs (source, started_at, finished_at, status, rows_inserted) VALUES "
+                          "('adventure_log', '2026-11-12 06:00+00', '2026-11-12 06:00+00', 'ok', 1)"))
+    r = RunResult()
+    store_activities(engine, settings, [act(3, "I found another thing", day=12)], r)
+    assert "possible gap" in r.warnings[0] and "RuneMetrics" not in r.warnings[0]

@@ -1,0 +1,121 @@
+{
+ "name": "Get Grouped",
+ "skills": {
+  "attack": {
+   "fine_xp": 267320483,
+   "level": 99
+  },
+  "defence": {
+   "fine_xp": 151233163,
+   "level": 99
+  },
+  "strength": {
+   "fine_xp": 314961563,
+   "level": 99
+  },
+  "hitpoints": {
+   "fine_xp": 82404473,
+   "level": 94
+  },
+  "ranged": {
+   "fine_xp": 98611163,
+   "level": 96
+  },
+  "prayer": {
+   "fine_xp": 113169603,
+   "level": 97
+  },
+  "magic": {
+   "fine_xp": 295409673,
+   "level": 99
+  },
+  "cooking": {
+   "fine_xp": 88922413,
+   "level": 95
+  },
+  "woodcutting": {
+   "fine_xp": 390534353,
+   "level": 99
+  },
+  "fletching": {
+   "fine_xp": 194081513,
+   "level": 99
+  },
+  "fishing": {
+   "fine_xp": 75162913,
+   "level": 93
+  },
+  "firemaking": {
+   "fine_xp": 107678213,
+   "level": 97
+  },
+  "crafting": {
+   "fine_xp": 341014693,
+   "level": 99
+  },
+  "smithing": {
+   "fine_xp": 330630583,
+   "level": 99
+  },
+  "mining": {
+   "fine_xp": 96879183,
+   "level": 96
+  },
+  "herblore": {
+   "fine_xp": 211506203,
+   "level": 99
+  },
+  "agility": {
+   "fine_xp": 110876473,
+   "level": 97
+  },
+  "thieving": {
+   "fine_xp": 334890003,
+   "level": 99
+  },
+  "slayer": {
+   "fine_xp": 89668383,
+   "level": 95
+  },
+  "farming": {
+   "fine_xp": 133082083,
+   "level": 99
+  },
+  "runecraft": {
+   "fine_xp": 199813133,
+   "level": 99
+  },
+  "hunter": {
+   "fine_xp": 91514913,
+   "level": 95
+  },
+  "construction": {
+   "fine_xp": 316207763,
+   "level": 99
+  },
+  "summoning": {
+   "fine_xp": 83278823,
+   "level": 94
+  },
+  "dungeoneering": {
+   "fine_xp": 198365503,
+   "level": 99
+  },
+  "divination": {
+   "fine_xp": 81261103,
+   "level": 94
+  },
+  "invention": {
+   "fine_xp": 139372103,
+   "level": 99
+  },
+  "archaeology": {
+   "fine_xp": 244353503,
+   "level": 99
+  },
+  "necromancy": {
+   "fine_xp": 331279453,
+   "level": 99
+  }
+ }
+}

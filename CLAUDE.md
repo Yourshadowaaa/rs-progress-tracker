@@ -7,7 +7,7 @@ humans. This file covers what a new session needs to change the code safely.
 
 A personal RS3 progress tracker for one account, **`Get Grouped`**, a **group ironman** (GIM).
 - An hourly job stores XP snapshots from the Jagex hiscores.
-- It also stores the RuneMetrics adventure log, parsed into events (boss kills with counts,
+- It also stores the adventure log from Jagex's Adventurer's Log API, parsed into events (boss kills with counts,
   level-ups, XP milestones, quests, drops, pets, clues and so on).
 - A public, read-only dashboard charts both.
 
@@ -21,8 +21,15 @@ Production runs on Railway: https://rs-progress-tracker-production.up.railway.ap
   losing the database loses history for good. Ingestion reliability and backups matter more than features.
 - **The display name contains a space.** The hiscores client tries `%20`, `+`, `_` and `%A0`
   (`name_variants()` in `clients/hiscores.py`).
-- **RuneMetrics `skillvalues` XP is ×10.** Divide it by 10, as `parse_profile` does.
-- **Unverified hypotheses.** Log timestamps (`13-Oct-2026 10:01`) are assumed to be UTC. Parser
+- **RuneMetrics is gone** (all `apps.runescape.com/runemetrics/...` endpoints offline since 10 Nov 2026).
+  Its replacement is the Adventurer's Log API: `secure.runescape.com/m=adventurers-log/api/v1/playerEvents/NAME`
+  (20 newest events, ISO dates with offset, a `type` per event) and `playerData/NAME?includeSkills=true`
+  (level + `fine_xp`, no ranks). Errors are JSON `{"error": ...}`; `PLAYER_NOT_FOUND` (404) also means hidden.
+  Event visibility is set in-game: Settings → Gameplay → Chat & Social → RuneMetrics Event Log.
+- **Player Data `fine_xp` is ×10.** Divide it by 10, as `parse_player_data` does. Skill keys differ from
+  display names (`hitpoints`, `runecraft`): map them with `PLAYER_DATA_SKILL_KEYS` in `reference.py`.
+- **Unverified hypotheses.** Legacy log rows (RuneMetrics, `13-Oct-2026 10:01`) were assumed to be UTC;
+  new events carry a real offset, so this only matters for rows stored before the cutover. Parser
   wording comes from synthetic samples. Both still need confirming against live data; see
   `docs/verification.md`.
 - **The completionist cape page is one "Achievements list" table** (Name, Description, Members,
@@ -53,11 +60,11 @@ Railway project
 | Path | Role |
 |---|---|
 | `src/tracker/config.py` | pydantic-settings, read from env vars. Rewrites `postgres://` URLs to `postgresql+psycopg://` |
-| `src/tracker/reference.py` | Skill ids (RuneMetrics 0–28, Overall = −1; hiscores line index = id + 1), XP table to level 120, `BOSSES` / `BOSS_ALIASES` / `normalise_boss()` |
+| `src/tracker/reference.py` | Skill ids (Jagex ids 0–28, Overall = −1; hiscores line index = id + 1), `PLAYER_DATA_SKILL_KEYS`, XP table to level 120, `BOSSES` / `BOSS_ALIASES` / `normalise_boss()` |
 | `src/tracker/models.py` | Tables: players, skills, xp_snapshots, adventure_log_raw, adventure_events, ingestion_runs. The `xp_deltas` view is defined in migration 0001 |
-| `src/tracker/clients/` | `http.py` (retry/backoff; `NotFound` / `ProfilePrivate` / `UpstreamError`), `hiscores.py` (lite CSV), `runemetrics.py` (profile JSON) |
-| `src/tracker/jobs/xp_snapshot.py` | Hourly snapshot: hiscores, falling back to RuneMetrics. `overwrite=True` for manual runs |
-| `src/tracker/jobs/adventure_log.py` | Raw entry storage with occurrence dedupe, gap warning, event parsing, `reparse()` |
+| `src/tracker/clients/` | `http.py` (retry/backoff; `NotFound` / `PlayerHidden` / `UpstreamError`), `hiscores.py` (lite CSV), `adventurers_log.py` (`Activity`, playerEvents + playerData JSON) |
+| `src/tracker/jobs/xp_snapshot.py` | Hourly snapshot: hiscores, falling back to Player Data (source `adventurers_log`, ranks None). `overwrite=True` for manual runs |
+| `src/tracker/jobs/adventure_log.py` | Raw entry storage with occurrence dedupe (minute-floored key), RuneMetrics cutover guard, gap warning, event parsing, `reparse()` |
 | `src/tracker/jobs/runner.py` | `run_all()`, shared by cron and the force-update button. Postgres advisory lock `INGEST_LOCK_KEY` |
 | `src/tracker/jobs/runs.py` | `tracked_run()` context manager writes `ingestion_runs` and swallows and records every exception. JSON logging |
 | `src/tracker/jobs/__main__.py` | CLI: `run-all`, `xp`, `log`, `backup`, `reparse [--all]`, `probe`, `export-corpus` |
@@ -80,13 +87,15 @@ Railway project
 2. **Snapshot timing.** Snapshots sit at the hour floor (UTC). A manual force update overwrites the
    current hour's row and never adds a second row in the same hour.
 3. **Adventure log dedupe.**
-   - `entry_key = sha256(time|text|details)`. If the database holds *m* copies of a key and the
-     fetch contains *n*, insert occurrences *m+1..n*.
+   - `entry_key = sha256(time floored to the minute, UTC|text|details)`. Don't change the key format: it
+     must keep matching rows stored before the RuneMetrics cutover.
+   - If the database holds *m* copies of a key and the fetch contains *n*, insert occurrences
+     *m+1..n* (minus copies the cutover guard matched to legacy rows).
    - Identical same-minute entries are real and are kept.
 4. **Raw log text is never discarded.** Events are derived from it and can be rebuilt. After
    changing parser rules or `BOSSES` / `BOSS_ALIASES`, bump `PARSER_VERSION` and run `reparse`.
 5. **Never substitute another hiscores table's data.** On a 404 the job checks the regular table
-   only to explain the problem, then uses RuneMetrics (the account's own data).
+   only to explain the problem, then uses Adventurer's Log Player Data (the account's own data).
 6. **Jobs never crash-loop.**
    - Failures are recorded in `ingestion_runs` and the process exits 0.
    - Health counts as degraded when a job's latest run failed, or it has had no success for 2 hours.
@@ -157,10 +166,9 @@ CI (`.github/workflows/ci.yml`) runs the full suite against a Postgres 16 servic
 ## Open items
 
 - Confirm against live data (`docs/verification.md`):
-  - log timezone
+  - log timezone of legacy (pre-cutover) rows; new events carry an offset
+  - Adventurer's Log API live: URLs, `%20`, 404 behaviour, wording vs the RuneMetrics era
   - real adventure log wording; replace synthetic corpus lines with real ones (`export-corpus`)
   - Railway config-as-code field names
   - backup upload to S3 or a Railway bucket
 - Invention uses the elite XP curve, which isn't tabulated, so it shows no next-level progress.
-- Optional, not built: backfill from the RuneMetrics `xp-monthly` endpoint. The URL is already in
-  `clients/runemetrics.py` as `MONTHLY_URL`.

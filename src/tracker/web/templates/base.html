@@ -27,13 +27,13 @@
 </header>
 <main>
 {% if profile_private %}
-<div class="banner">⚠ Adventure log unavailable: the RuneMetrics profile is private. Turn on RuneMetrics profile visibility in-game, or log entries will be lost.</div>
+<div class="banner">⚠ Adventure log unavailable: the player is not found or hidden. Check in-game Settings → Gameplay → Chat &amp; Social → RuneMetrics Event Log, or log entries will be lost.</div>
 {% endif %}
 {% if not has_data %}
 <div class="panel empty">No data yet. The first hourly run will populate this dashboard.</div>
 {% endif %}
 {% block content %}{% endblock %}
-<p class="note">Times shown in {{ tz }}. Data from public Jagex hiscores (m={{ hiscore_table }}) and RuneMetrics.</p>
+<p class="note">Times shown in {{ tz }}. Data from public Jagex hiscores (m={{ hiscore_table }}) and the Adventurer's Log API.</p>
 </main>
 {% block scripts %}{% endblock %}
 </body>

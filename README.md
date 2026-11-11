@@ -4,7 +4,8 @@ A personal tracker for the RuneScape 3 group ironman **Get Grouped**. Every hour
 
 1. **XP snapshots** for every skill from the hiscores (full history, never overwritten). Group
    ironmen are only ranked on the regular table, so that is the default.
-2. **The adventure log** from RuneMetrics. Raw entries are stored forever and parsed into structured
+2. **The adventure log** from Jagex's Adventurer's Log API (RuneMetrics went offline on 10 Nov 2026).
+   Raw entries are stored forever and parsed into structured
    events: boss kills with counts, level-ups, XP milestones, quests, drops, pets, clues and so on.
 
 A public, read-only dashboard charts XP over time, gains and boss kills.
@@ -36,7 +37,7 @@ Both services build from the same `Dockerfile`.
 
 | Path | What it is |
 |---|---|
-| `src/tracker/clients/` | Hiscores and RuneMetrics HTTP clients (User-Agent, retry with backoff, typed errors) |
+| `src/tracker/clients/` | Hiscores and Adventurer's Log API HTTP clients (User-Agent, retry with backoff, typed errors) |
 | `src/tracker/jobs/` | XP job, adventure-log job, reparse, backup, probe, CLI (`__main__.py`) |
 | `src/tracker/parser/rules.py` | Ordered regex rules for adventure log entries, plus `PARSER_VERSION` |
 | `src/tracker/reference.py` | Skills, XP curve, bosses and aliases |
@@ -51,20 +52,25 @@ Both services build from the same `Dockerfile`.
   - **Name spellings.** Spaces in the name are tried as `%20`, `+`, `_` and `%A0` before treating
     the player as not found.
   - **Player not found (404).** The job never reads another hiscores table in its place. It checks
-    the regular table once, only to say why in the run warning, then takes XP from RuneMetrics
-    `skillvalues` (reported ×10; the job divides by 10). The run shows as `partial` on `/status`.
-  - **Other hiscores errors** use the same RuneMetrics fallback.
-  - **Ranks.** RuneMetrics ranks are regular-table ranks. They are kept when `HISCORE_TABLE=hiscore` and
-    dropped for the ironman tables.
+    the regular table once, only to say why in the run warning, then takes XP from the
+    Adventurer's Log API Player Data (`fine_xp` is reported ×10; the job divides by 10). The run shows as `partial` on `/status`.
+  - **Other hiscores errors** use the same Player Data fallback (snapshot `source = 'adventurers_log'`).
+  - **Ranks** come from the hiscores only. Player Data has no ranks, so fallback snapshots have none.
   - **Snapshot time.** The run time truncated to the hour (UTC).
 - **Bad data.** An all-zero payload is rejected. An XP decrease is stored with `flag='xp_decrease'`
   and a warning.
-- **Adventure log dedupe.** `entry_key = sha256(time | text | details)` plus an `occurrence` number.
+- **Adventure log dedupe.** `entry_key = sha256(time floored to the minute, UTC | text | details)` plus an
+  `occurrence` number. The precise time (the API gives seconds and an offset) is stored separately.
   If a fetch contains *n* copies of a key and the database already holds *m*, occurrences *m+1..n*
   are inserted. Two genuinely identical entries in the same minute are both kept, and re-fetching
   the same 20 entries inserts nothing.
+- **RuneMetrics cutover.** Rows stored before the switch have minute-precision times that may be off
+  by whole hours (the old log's timezone was never confirmed). A fetched entry whose key is not stored
+  is skipped if an unmatched legacy row (payload without `type`) has the same text and details within
+  ±14 h. The guard only covers entries up to 14 h after the newest legacy row, so it switches itself off.
 - **Gap detection.** If the database already has entries and none of the fetched entries were seen
-  before, the run is marked `partial` with a "possible gap" warning, because events may have been lost.
+  before, the run is marked `partial` with a "possible gap" warning, because events may have been lost. The first
+  run after the RuneMetrics shutdown says so in the warning.
 - **Timestamps** are stored in UTC and shown in `DISPLAY_TZ` (default Europe/Berlin). A kill entry's
   time is when the game wrote the log entry, not when each kill happened. The bosses page says so.
 

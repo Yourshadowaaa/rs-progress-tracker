@@ -1,4 +1,4 @@
-"""Hourly XP snapshot: hiscores (configured table) with RuneMetrics skillvalues as fallback."""
+"""Hourly XP snapshot: hiscores (configured table) with Adventurer's Log Player Data as fallback."""
 
 import logging
 from datetime import UTC, datetime
@@ -7,9 +7,9 @@ import httpx
 from sqlalchemy import Engine, select
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 
+from ..clients.adventurers_log import fetch_player_skills
 from ..clients.hiscores import SkillRow, fetch_hiscores
 from ..clients.http import NotFound, UpstreamError
-from ..clients.runemetrics import fetch_profile
 from ..config import Settings
 from ..db import get_or_create_player, session_scope
 from ..models import XpSnapshot
@@ -37,14 +37,12 @@ def _on_table(client: httpx.Client, table: str, name: str) -> bool | None:
         return None
 
 
-def _runemetrics_rows(client: httpx.Client, settings: Settings, reason: Exception) -> list[SkillRow]:
-    profile = fetch_profile(client, settings.player_name)
-    if not profile.skills:
-        raise UpstreamError("RuneMetrics fallback returned no skill values") from reason
-    if settings.hiscore_table == "hiscore":
-        return profile.skills
-    # RuneMetrics ranks are regular-hiscores ranks; don't mix them into an ironman-table rank history.
-    return [SkillRow(r.skill_id, r.level, r.xp, None) for r in profile.skills]
+FALLBACK_SOURCE = "adventurers_log"
+
+
+def _player_data_rows(client: httpx.Client, settings: Settings) -> list[SkillRow]:
+    # Player Data has no ranks, so fallback snapshots always have rank None.
+    return fetch_player_skills(client, settings.player_name)
 
 
 def fetch_skill_rows(client: httpx.Client, settings: Settings, result: RunResult) -> tuple[list[SkillRow], str]:
@@ -55,7 +53,8 @@ def fetch_skill_rows(client: httpx.Client, settings: Settings, result: RunResult
         return rows, "hiscores"
     except NotFound as exc:
         # Never read another hiscores table in its place. Check the regular table only to explain
-        # the problem, then take XP from RuneMetrics (the account's own data) so tracking continues.
+        # the problem, then take XP from the Adventurer's Log
+        # Player Data (the account's own data) so tracking continues.
         hint = ""
         if table != "hiscore":
             on_regular = _on_table(client, "hiscore", name)
@@ -66,15 +65,17 @@ def fetch_skill_rows(client: httpx.Client, settings: Settings, result: RunResult
                 hint = (" The player is not on the regular hiscores either: the name may be wrong or the "
                         "account is not ranked in any skill yet.")
         try:
-            rows = _runemetrics_rows(client, settings, exc)
-        except UpstreamError as rm_exc:
-            raise TableMismatch(f"'{name}' not found on m={table} ({exc}).{hint} RuneMetrics fallback also "
-                                f"failed: {rm_exc}") from exc
-        result.warn(f"'{name}' not found on m={table} ({exc}).{hint} XP taken from RuneMetrics instead.")
-        return rows, "runemetrics"
+            rows = _player_data_rows(client, settings)
+        except UpstreamError as pd_exc:
+            raise TableMismatch(f"'{name}' not found on m={table} ({exc}).{hint} Player Data fallback also "
+                                f"failed: {type(pd_exc).__name__}: {pd_exc}") from exc
+        result.warn(f"'{name}' not found on m={table} ({exc}).{hint} XP taken from Adventurer's Log Player Data "
+                    "instead (no ranks).")
+        return rows, FALLBACK_SOURCE
     except UpstreamError as exc:
-        result.warn(f"hiscores failed ({exc}); used RuneMetrics fallback")
-        return _runemetrics_rows(client, settings, exc), "runemetrics"
+        rows = _player_data_rows(client, settings)
+        result.warn(f"hiscores failed ({exc}); used Adventurer's Log Player Data fallback (no ranks)")
+        return rows, FALLBACK_SOURCE
 
 
 def store_snapshot(

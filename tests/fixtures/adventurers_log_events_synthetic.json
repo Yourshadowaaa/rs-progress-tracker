@@ -1,0 +1,53 @@
+{
+ "name": "Get Grouped",
+ "events": [
+  {
+   "date": "2026-10-13T09:58:12Z",
+   "type": "rs_plog_npc_kill_count",
+   "text": "I killed 11 Raksha, the Shadow Colossus.",
+   "details": "I killed 11 Raksha, the Shadow Colossus."
+  },
+  {
+   "date": "2026-10-13T09:41:31Z",
+   "type": "rs_plog_levelup_count",
+   "text": "Levelled up Necromancy.",
+   "details": "I levelled my Necromancy skill, I am now level 103."
+  },
+  {
+   "date": "2026-10-13T09:12:05Z",
+   "type": "rs_plog_item_drop",
+   "text": "I found a Shadow spike",
+   "details": "I found a Shadow spike. It dropped from Raksha, the Shadow Colossus."
+  },
+  {
+   "date": "2026-10-13T08:50:20Z",
+   "type": "rs_plog_npc_kill_count",
+   "text": "I killed  4 Kalphite Kings.",
+   "details": "I killed  4 Kalphite Kings."
+  },
+  {
+   "date": "2026-10-13T08:50:47Z",
+   "type": "rs_plog_npc_kill_count",
+   "text": "I killed  4 Kalphite Kings.",
+   "details": "I killed  4 Kalphite Kings."
+  },
+  {
+   "date": "2026-10-13T08:12:09Z",
+   "type": "rs_plog_xp_milestone",
+   "text": "40000000XP in Slayer",
+   "details": "I now have at least 40000000 experience points in the Slayer skill."
+  },
+  {
+   "date": "2026-10-12T23:03:50+01:00",
+   "type": "rs_plog_quest",
+   "text": "Quest complete: Ode of the Devourer",
+   "details": "I have completed the quest Ode of the Devourer."
+  },
+  {
+   "date": "2026-10-12T21:40:03Z",
+   "type": "rs_plog_finished_trail",
+   "text": "Completed a hard Treasure Trail.",
+   "details": "I have completed a hard treasure trail."
+  }
+ ]
+}

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from tests.conftest import load_json
-from tracker.clients.runemetrics import parse_profile
+from tracker.clients.adventurers_log import parse_events
 from tracker.jobs.adventure_log import store_activities
 from tracker.jobs.runs import RunResult
 from tracker.web import app as web
@@ -97,7 +97,7 @@ def test_xp_endpoints(client, engine):
 
 def test_boss_and_event_endpoints(client, engine, settings):
     seed_xp(engine, hours=2)
-    store_activities(engine, settings, parse_profile(load_json("runemetrics_profile_synthetic.json")).activities, RunResult())
+    store_activities(engine, settings, parse_events(load_json("adventurers_log_events_synthetic.json")), RunResult())
     kills = client.get("/api/bosses/kills", params={"range": "all", "bucket": "day"}).json()
     raksha = next(s for s in kills["series"] if s["name"] == "Raksha, the Shadow Colossus")
     day = kills["buckets"].index("2026-10-13")
@@ -120,7 +120,17 @@ def test_health_reports_failed_latest_run(client, engine):
     h = client.get("/health").json()
     assert h["status"] == "degraded" and h["profile_private"] is True
     assert h["jobs"]["adventure_log"]["failing"] and not h["jobs"]["xp"]["failing"]
-    assert "profile is private" in client.get("/status").text
+    assert "not found or hidden" in client.get("/status").text
+
+
+def test_health_flags_hidden_player(client, engine):
+    with engine.begin() as conn:
+        conn.execute(text("""INSERT INTO ingestion_runs (source, started_at, finished_at, status, rows_inserted, error) VALUES
+            ('adventure_log', now(), now(), 'failed', 0,
+             'PlayerHidden: PLAYER_NOT_FOUND (HTTP 404): player is hidden, renamed or does not exist')"""))
+    assert client.get("/health").json()["profile_private"] is True
+    page = client.get("/status").text
+    assert "not found or hidden" in page and "RuneMetrics Event Log" in page
 
 
 @pytest.mark.parametrize("env_url,expected", [(True, "database_unreachable"), (False, "database_url_missing")])

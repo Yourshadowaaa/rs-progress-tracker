@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 OVERALL_ID = -1
 
-# RuneMetrics skill ids. The hiscores lite CSV lists Overall first, then skills in this same order,
+# Jagex skill ids. The hiscores lite CSV lists Overall first, then skills in this same order,
 # so hiscores line index == skill id + 1. Verified against fixtures in tests/fixtures.
 SKILLS: dict[int, str] = {
     0: "Attack", 1: "Defence", 2: "Strength", 3: "Constitution", 4: "Ranged",
@@ -17,6 +17,17 @@ SKILLS: dict[int, str] = {
     28: "Necromancy",
 }
 ALL_SKILLS: dict[int, str] = {OVERALL_ID: "Overall", **SKILLS}
+# Adventurer's Log API playerData skill keys -> skill id. Explicit on purpose: some keys differ from the
+# display names (hitpoints = Constitution, runecraft = Runecrafting).
+PLAYER_DATA_SKILL_KEYS: dict[str, int] = {
+    "attack": 0, "defence": 1, "strength": 2, "hitpoints": 3, "ranged": 4,
+    "prayer": 5, "magic": 6, "cooking": 7, "woodcutting": 8, "fletching": 9,
+    "fishing": 10, "firemaking": 11, "crafting": 12, "smithing": 13, "mining": 14,
+    "herblore": 15, "agility": 16, "thieving": 17, "slayer": 18, "farming": 19,
+    "runecraft": 20, "hunter": 21, "construction": 22, "summoning": 23,
+    "dungeoneering": 24, "divination": 25, "invention": 26, "archaeology": 27,
+    "necromancy": 28,
+}
 SKILL_BY_NAME: dict[str, int] = {name.lower(): sid for sid, name in ALL_SKILLS.items()}
 # Skill icons are hotlinked from the RuneScape Wiki (Category:Skill_icons) by the viewer's browser.
 SKILL_ICON_BASE = "https://runescape.wiki/images"
